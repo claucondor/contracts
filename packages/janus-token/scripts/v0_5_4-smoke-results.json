@@ -1,0 +1,39 @@
+{
+  "version": "0.5.4",
+  "date": "2026-05-30T19:13:16.099Z",
+  "proxy": "0x09A3DCa868EcC39360fDe4E22046eCfcbA5b4078",
+  "impl": "0xd6584cb2788D2eA5c3AB61fb72aa9fEaC27ae79D",
+  "checks": {
+    "version": {
+      "value": "0.5.3",
+      "pass": true
+    },
+    "firstSnapshotBlock_in_abi": {
+      "pass": true
+    },
+    "alice_fresh_before_wrap": {
+      "value": 0,
+      "pass": true
+    },
+    "scanner_returns_empty_for_fresh": {
+      "pass": true,
+      "firstBlock": 0
+    },
+    "alice_fsb_after_wrap": {
+      "value": 113178941,
+      "wrapBlock": 113178941,
+      "matches": true,
+      "pass": true
+    },
+    "scanner_finds_wrap_via_hint": {
+      "firstBlock": 113178941,
+      "logsFound": 1,
+      "pass": true
+    }
+  },
+  "tx_hashes": {
+    "wrap_flow": "a9d361caf8664cc001b6a802fc7d27419b8f8693c80549f2bba5ca892b793173",
+    "wrap_evm": "0x58fcbb1e0285987f0c544d7f0b25a2992d11eda0057e4e6c833698d93e36b9cd"
+  },
+  "conclusion": "PASS"
+}

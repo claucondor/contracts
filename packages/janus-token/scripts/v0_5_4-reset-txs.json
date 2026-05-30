@@ -1,0 +1,42 @@
+{
+  "version": "0.5.4",
+  "date": "2026-05-30",
+  "purpose": "Reset 4 test wallets after JanusFlow v0.5.3 upgrade. firstSnapshotBlock mapping is fresh (all zeros) — next wrap on each wallet will populate the hint correctly.",
+  "network": "flow-cadence-testnet + flow-evm-testnet",
+  "chainId": 545,
+  "evm_proxy": "0x09A3DCa868EcC39360fDe4E22046eCfcbA5b4078",
+  "evm_impl": "0xd6584cb2788D2eA5c3AB61fb72aa9fEaC27ae79D",
+  "resets": {
+    "alice": {
+      "cadence_address": "0x7599043aea001283",
+      "alias": "testnet-claucondor",
+      "evm_coa_hex": "b7557ee5d4a32d06",
+      "flow_tx": "c5ea43b20b1ad720bdef3215e1f5246436e06cb839ce09fe9e62893a963b413d",
+      "flow_tx_explorer": "https://testnet.flowscan.io/tx/c5ea43b20b1ad720bdef3215e1f5246436e06cb839ce09fe9e62893a963b413d",
+      "status": "SEALED"
+    },
+    "bob": {
+      "cadence_address": "0xd807a3992d7be612",
+      "evm_coa_hex": "50d93efba617e0bf",
+      "flow_tx": "b695e7746d10149c5c012e3bab0c9f0ee189849f35ed2ef591d22a0be3dc8fa3",
+      "flow_tx_explorer": "https://testnet.flowscan.io/tx/b695e7746d10149c5c012e3bab0c9f0ee189849f35ed2ef591d22a0be3dc8fa3",
+      "status": "SEALED"
+    },
+    "dave": {
+      "cadence_address": "0xd32d9100e1fe983b",
+      "evm_coa_hex": "7b94cfc8a64971cd",
+      "flow_tx": "797a6264b7267cb656de70b147cef7e0076d62cdfe9e3e049724f4c4418130ad",
+      "flow_tx_explorer": "https://testnet.flowscan.io/tx/797a6264b7267cb656de70b147cef7e0076d62cdfe9e3e049724f4c4418130ad",
+      "status": "SEALED"
+    },
+    "c2": {
+      "cadence_address": "0x4fdd7244df4213c2",
+      "evm_coa_hex": "86501f6722a3aede",
+      "flow_tx": "e1a92f902ec97b91bfad850d15016a38bba20d6fe4cfd2286ef11d41920c0d8e",
+      "flow_tx_explorer": "https://testnet.flowscan.io/tx/e1a92f902ec97b91bfad850d15016a38bba20d6fe4cfd2286ef11d41920c0d8e",
+      "status": "SEALED"
+    }
+  },
+  "manual_steps_for_operator": "After reset, operator must clear localStorage for each test wallet in DevTools: localStorage.removeItem('@openjanus/janus-flow/state') or clear all openjanus keys. Then: Setup -> Wrap -> the first wrap will populate firstSnapshotBlock on-chain.",
+  "note": "firstSnapshotBlock[user] == 0 for all 4 COAs post-reset. No pre-v0.5.4 wallets to worry about (testnet only, all reset today)."
+}
