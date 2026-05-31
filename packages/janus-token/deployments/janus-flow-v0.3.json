@@ -7,8 +7,8 @@
   "chainId": 545,
   "contracts": {
     "JanusFlow_proxy": "0x09A3DCa868EcC39360fDe4E22046eCfcbA5b4078",
-    "JanusFlow_impl": "0x4F0914911C2f2beb7bFf6d060F3136bbd8c57943",
-    "JanusFlow_impl_prior": "0x9321dF5884021D7E19Ad0EB5F582f8E2A70236eC",
+    "JanusFlow_impl": "0x0d54cf5560548A267EB31b4a90858c9b37e0C740",
+    "JanusFlow_impl_prior": "0x4F0914911C2f2beb7bFf6d060F3136bbd8c57943",
     "AmountDiscloseVerifier": "0x9c83b2b1EFFD3bd375b9Bee93Cb618005D6A2Dc4",
     "ConfidentialTransferVerifier": "0x48f791D2a4992F448Cc36F12e5500b6553e969b3",
     "BabyJub": "0x27139AFda7425f51F68D32e0A38b7D43BcB0f870"

@@ -1,0 +1,41 @@
+{
+  "version": "0.5.5-fees",
+  "date": "2026-05-31T04:47:03.271Z",
+  "network": "flow-evm-testnet",
+  "chainId": 545,
+  "proxy": "0x09A3DCa868EcC39360fDe4E22046eCfcbA5b4078",
+  "prior_impl": "0x4F0914911C2f2beb7bFf6d060F3136bbd8c57943",
+  "new_impl": "0x0d54cf5560548A267EB31b4a90858c9b37e0C740",
+  "tx_hashes": {
+    "impl_deploy_flow": "d0c9db8ad65aa6fb5f712ba16a96a3ec26b1732e5dd4aee82cfa62c5d24cf564",
+    "impl_deploy_evm": "0x46058462783c312ecb0b8580581ddbdaf3b289fc3be617617d063056374fc33a",
+    "upgrade_flow": "a02038bee8f113096f193b389e86cfabf6ed56d984cd66611143a0dc2156dc89",
+    "upgrade_evm": "0x6ff00e18ab092557d3193509f2fba68fe3dd983bf5f5ddfbda5f4062c545fc4c",
+    "reset_c2_flow": "aafd3cb4d7980477d990968a6aaa6c4f8aa2496a9ea405f7e33401a425461b54",
+    "reset_c2_evm": "0xe3fc40520a5ef83b4beb411e41cf4579c52b089076a5947f0cafd2bdc75e6350"
+  },
+  "verification": {
+    "erc1967_upgrade_event_matches_impl": true,
+    "feeBps_post_upgrade": 10,
+    "feeRecipient_post_upgrade": "0x0000000000000000000000022f6b30Af48A94787",
+    "feeBps_ok": true,
+    "feeRecipient_ok": true,
+    "reset_c2_ok": true
+  },
+  "reset_c2": {
+    "target_evm": "0x00000000000000000000000286501f6722a3aede",
+    "flow_tx": "aafd3cb4d7980477d990968a6aaa6c4f8aa2496a9ea405f7e33401a425461b54",
+    "evm_tx": "0xe3fc40520a5ef83b4beb411e41cf4579c52b089076a5947f0cafd2bdc75e6350",
+    "firstSnapshotBlock_after": "0",
+    "commitment_x_after": "0",
+    "commitment_y_after": "1",
+    "fsb_is_zero": true,
+    "commitment_is_identity": true
+  },
+  "explorer": {
+    "proxy": "https://evm-testnet.flowscan.io/address/0x09A3DCa868EcC39360fDe4E22046eCfcbA5b4078",
+    "new_impl": "https://evm-testnet.flowscan.io/address/0x0d54cf5560548A267EB31b4a90858c9b37e0C740",
+    "upgrade_tx": "https://evm-testnet.flowscan.io/tx/0x6ff00e18ab092557d3193509f2fba68fe3dd983bf5f5ddfbda5f4062c545fc4c",
+    "reset_tx": "https://evm-testnet.flowscan.io/tx/0xe3fc40520a5ef83b4beb411e41cf4579c52b089076a5947f0cafd2bdc75e6350"
+  }
+}

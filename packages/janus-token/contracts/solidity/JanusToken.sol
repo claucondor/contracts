@@ -238,7 +238,7 @@ abstract contract JanusToken is
     ///     hatch, not a normal-path operation.
     ///   * `totalLocked` is INTENTIONALLY NOT updated — the underlying asset
     ///     custody is independent of per-account commitments.
-    function adminResetSlot(address user) external onlyOwner {
+    function adminResetSlot(address user) external virtual onlyOwner {
         require(
             block.chainid == FLOW_EVM_TESTNET_CHAIN_ID,
             "JanusToken: adminResetSlot is testnet-only (chainId 545)"
