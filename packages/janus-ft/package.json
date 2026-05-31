@@ -1,5 +1,5 @@
 {
-  "name": "@openjanus/janus-ft",
+  "name": "@claucondor/janus-ft",
   "version": "0.4.0",
   "description": "JanusFT — pure-Cadence confidential-amount wrapper for any FungibleToken vault on Flow (lab-grade — stub crypto; cross-VM proof verification arrives in v0.5).",
   "type": "module",

@@ -1,21 +1,21 @@
-# openjanus/contracts
+# claucondor/contracts
 
-Token standards and high-level contracts built on [@openjanus/primitives](https://github.com/openjanus/primitives).
+Token standards and high-level contracts built on [@claucondor/primitives](https://github.com/claucondor/primitives).
 
 ---
 
 ## What this repo is
 
-`openjanus/contracts` is **TIER 2** — it consumes primitives (BabyJub, Pedersen,
+`claucondor/contracts` is **TIER 2** — it consumes primitives (BabyJub, Pedersen,
 Groth16) and composes them into deployable token contracts with full Cadence and
 EVM support on Flow.
 
 ```
-TIER 1  openjanus/primitives   -- BabyJub.sol, Pedersen, Groth16 verifier infrastructure
+TIER 1  claucondor/primitives   -- BabyJub.sol, Pedersen, Groth16 verifier infrastructure
   |
-TIER 2  openjanus/contracts    -- this repo: JanusToken, JanusFlow, JanusERC20
+TIER 2  claucondor/contracts    -- this repo: JanusToken, JanusFlow, JanusERC20
   |
-TIER 3  apps                   -- PrivateTip, LetheOrderbook, AuroraReveal, etc.
+TIER 3  apps                    -- PrivateTip, LetheOrderbook, AuroraReveal, etc.
 ```
 
 The privacy primitive in every contract is the same: **Pedersen commitments** on
@@ -28,13 +28,13 @@ unwrap.
 
 | Package | Description |
 |---|---|
-| [`@openjanus/janus-token`](./packages/janus-token) | Abstract base SDK class (Pedersen-commit confidential token with Groth16-gated wrap/transfer/unwrap) |
-| [`@openjanus/janus-flow`](./packages/janus-flow) | Native FLOW concrete token via Cadence cross-VM |
-| [`@openjanus/janus-erc20`](./packages/janus-erc20) | ERC20-wrapping confidential token on Flow EVM |
-| [`@openjanus/janus-ft`](./packages/janus-ft) | Any Cadence FungibleToken vault |
+| [`@claucondor/janus-token`](./packages/janus-token) | Abstract base SDK class (Pedersen-commit confidential token with Groth16-gated wrap/transfer/unwrap) |
+| [`@claucondor/janus-flow`](./packages/janus-flow) | Native FLOW concrete token via Cadence cross-VM |
+| [`@claucondor/janus-erc20`](./packages/janus-erc20) | ERC20-wrapping confidential token on Flow EVM |
+| [`@claucondor/janus-ft`](./packages/janus-ft) | Any Cadence FungibleToken vault |
 
-All four packages are also re-exported by [`@openjanus/sdk`](https://github.com/openjanus/sdk)
-as `@openjanus/sdk/tokens` — most apps should import from the SDK rather than
+All four packages are also re-exported by [`@claucondor/sdk`](https://github.com/claucondor/sdk)
+as `@claucondor/sdk/tokens` — most apps should import from the SDK rather than
 from individual package paths.
 
 ---
@@ -43,7 +43,7 @@ from individual package paths.
 
 Every contract in this repo takes the name of a Roman deity associated with
 **doors, transitions, keys, and thresholds** — reflecting the cross-VM nature
-of the openjanus stack (Cadence + EVM). Janus: the two-faced god of beginnings
+of the Janus privacy stack (Cadence + EVM). Janus: the two-faced god of beginnings
 who stands at every threshold, looking simultaneously inward (Cadence) and
 outward (EVM).
 
@@ -64,19 +64,19 @@ outward (EVM).
 | Hekate | Goddess of crossroads and keys | `HekateMixer` — mixer pattern | future |
 | Mercurius | Messenger of the gods | `MercuriusTransfer` — generic transfer | future |
 
-Package names use lowercase + hyphen: `@openjanus/janus-token`,
-`@openjanus/cardea-vault`, etc.
+Package names use lowercase + hyphen: `@claucondor/janus-token`,
+`@claucondor/cardea-vault`, etc.
 
 ---
 
 ## Quick start
 
 ```bash
-npm install @openjanus/sdk
+npm install @claucondor/sdk
 ```
 
 ```typescript
-import { JanusFlow } from "@openjanus/sdk/tokens";
+import { JanusFlow } from "@claucondor/sdk/tokens";
 
 const flow = new JanusFlow();
 await flow.connectWithSigner(wallet);
@@ -85,7 +85,7 @@ await flow.connectWithSigner(wallet);
 const commitment = await flow.balanceOfCommitment(coaEvmAddress);
 // { x: bigint, y: bigint } — BabyJubJub point, not cleartext
 
-// Full wrap / shieldedTransfer / unwrap: see @openjanus/sdk README
+// Full wrap / shieldedTransfer / unwrap: see @claucondor/sdk README
 ```
 
 ---

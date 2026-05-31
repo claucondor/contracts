@@ -1,5 +1,5 @@
 {
-  "name": "@openjanus/janus-token",
+  "name": "@claucondor/janus-token",
   "version": "0.1.0",
   "description": "JanusToken — BabyJubJub Pedersen commitment-based confidential token on Flow with Groth16-gated wrap/transfer/unwrap and 0.1% boundary fees (v0.5.4).",
   "type": "module",
