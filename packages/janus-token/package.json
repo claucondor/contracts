@@ -1,7 +1,7 @@
 {
   "name": "@openjanus/janus-token",
   "version": "0.1.0",
-  "description": "JanusToken — ElGamal accumulator-based confidential token on Flow with ZK-gated wrap/unwrap and pubkey rotation.",
+  "description": "JanusToken — BabyJubJub Pedersen commitment-based confidential token on Flow with Groth16-gated wrap/transfer/unwrap and 0.1% boundary fees (v0.5.4).",
   "type": "module",
   "scripts": {
     "compile": "hardhat compile --config hardhat.config.cjs",
