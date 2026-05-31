@@ -90,6 +90,16 @@ const commitment = await flow.balanceOfCommitment(coaEvmAddress);
 
 ---
 
+> **Status — testnet only.** These contracts are deployed on Flow EVM testnet
+> for demonstration and integration testing. **Not recommended for production
+> use until a third-party audit completes** (audit pending). Use at your own
+> risk on testnet.
+
+> **Fee model (v0.5.4+)**: `wrap` and `unwrap` each carry a **0.1% boundary
+> fee** (10 bps, hard cap 100 bps). Shielded transfers are **free**. Fee
+> recipient is configurable by the admin and accumulates as native FLOW in the
+> recipient's EVM balance.
+
 ## Deployed contracts (testnet)
 
 ### TIER 1 — Primitive contracts (shared, canonical)
@@ -103,7 +113,8 @@ const commitment = await flow.balanceOfCommitment(coaEvmAddress);
 
 | Contract | Network | Address |
 |---|---|---|
-| JanusFlow impl | Flow EVM testnet | `0xa2607E9EAb1718a2fAf5a1328A7d3a9Aa854efff` |
+| JanusFlow impl (v0.5.4-fees) | Flow EVM testnet | `0x4F0914911C2f2beb7bFf6d060F3136bbd8c57943` |
+| Fee recipient (admin COA) | Flow EVM testnet | `0x0000000000000000000000022f6b30Af48A94787` |
 | AmountDiscloseVerifier | Flow EVM testnet | `0x9c83b2b1EFFD3bd375b9Bee93Cb618005D6A2Dc4` |
 | ConfidentialTransferVerifier | Flow EVM testnet | `0x48f791D2a4992F448Cc36F12e5500b6553e969b3` |
 | JanusFlow.cdc router | Flow Cadence testnet | `0x5dcbeb41055ec57e` |
