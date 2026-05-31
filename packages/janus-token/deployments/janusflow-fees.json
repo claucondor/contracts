@@ -1,0 +1,32 @@
+{
+  "version": "0.5.4-fees",
+  "date": "2026-05-30T23:44:00.687Z",
+  "network": "flow-evm-testnet",
+  "chainId": 545,
+  "impl_address": "0x4F0914911C2f2beb7bFf6d060F3136bbd8c57943",
+  "deploy_tx_flow": "c729aef649a0c3db625524b2309b1b86830b95fad388ebe0e3d4c017537c38e6",
+  "deploy_tx_evm": "0x85d228aa8e0b4357228cc31c9261016302ff27af0d416cbdacb1c47c4dab4dc4",
+  "status": "deployed_and_upgraded",
+  "upgrade_tx_flow": "83d0415d1eb60e8193984e6002d9ec7d2b79b25e032054f45710f03adfdbb89e",
+  "upgrade_tx_evm": "0xa2443ba00289f9f587970329bf8295762c3a13a1f2154cc7e2ec3a5c6e9ba873",
+  "init_fees_tx_flow": "4ff8efca2ee22f95f28f264affb2f1e184d9a068cf92538694afa4f00ae69f2a",
+  "init_fees_tx_evm": "0xda8e6868475ad4d11cf79bde9a62aa0d0f131cd5f3b19e5e50b9eec67a8f493d",
+  "proxy": "0x09A3DCa868EcC39360fDe4E22046eCfcbA5b4078",
+  "fee_config": {
+    "feeRecipient": "0x0000000000000000000000022f6b30af48a94787",
+    "feeBps": 10,
+    "maxFeeBps": 100,
+    "feePct": "0.1%"
+  },
+  "verification": {
+    "erc1967_upgrade_event_matches_impl": true,
+    "proxy_version": "0.5.4-fees",
+    "feeRecipient_onchain": "0x0000000000000000000000022f6b30Af48A94787",
+    "feeBps_onchain": 10,
+    "maxFeeBps_onchain": 100
+  },
+  "explorer": {
+    "proxy": "https://evm-testnet.flowscan.io/address/0x09A3DCa868EcC39360fDe4E22046eCfcbA5b4078",
+    "impl": "https://evm-testnet.flowscan.io/address/0x4F0914911C2f2beb7bFf6d060F3136bbd8c57943"
+  }
+}

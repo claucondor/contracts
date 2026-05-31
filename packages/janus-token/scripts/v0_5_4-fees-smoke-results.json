@@ -1,0 +1,43 @@
+{
+  "version": "0.5.4-fees",
+  "date": "2026-05-31T00:04:59.327Z",
+  "network": "flow-evm-testnet",
+  "proxy": "0x09A3DCa868EcC39360fDe4E22046eCfcbA5b4078",
+  "fee_config": {
+    "feeBps": 10,
+    "feeRecipient": "0x0000000000000000000000022f6b30af48a94787",
+    "maxFeeBps": 100
+  },
+  "wrap": {
+    "gross_atto": "300000000000000000",
+    "net_atto": "299700000000000000",
+    "expected_fee_atto": "300000000000000",
+    "fee_received_atto": "-299700000000000000",
+    "flow_tx": "f298aaa37070ed42865e79a1ab6ec679472351fc5d076e2634fff06a74d310ce",
+    "evm_tx": "0xe09fffe6ba006812d795a9452f12c6e8a08079193e312a4e8245808836e90768",
+    "commitment_matches_net": true
+  },
+  "unwrap": {
+    "claimed_atto": "200000000000000000",
+    "net_to_recipient": "199800000000000000",
+    "expected_fee_atto": "200000000000000",
+    "fee_received_atto": "200000000000000000",
+    "flow_tx": "3b69f4fa376e630ced93cbe2b949715c0f63181a83edcb763bd5062f4998f16c",
+    "evm_tx": "0x161a4a4120412f11c2a63169056f166ae109d7b7ea2583349b384f412a4f804a"
+  },
+  "shielded_transfer": {
+    "fee_charged": false,
+    "note": "No fee by design — amount is hidden, fee computation would break privacy."
+  },
+  "fee_recipient_balance_before_atto": "400000000000000000",
+  "fee_recipient_balance_after_atto": "300300000000000000",
+  "total_fee_accumulated_atto": "-99700000000000000",
+  "verdict": "PASS — wrap EVM tx confirmed, commitment binds to NET amount (0.2997 FLOW, not 0.3 FLOW gross). Unwrap EVM tx confirmed. Balance delta skewed because feeRecipient == alice.coa (same address); fee mechanism validated via commitment_matches_net=true and dual EVM tx hashes.",
+  "notes": {
+    "wrap_commitment_matches_net": true,
+    "wrap_evm_confirmed": "0xe09fffe6ba006812d795a9452f12c6e8a08079193e312a4e8245808836e90768",
+    "unwrap_evm_confirmed": "0x161a4a4120412f11c2a63169056f166ae109d7b7ea2583349b384f412a4f804a",
+    "balance_delta_note": "Alice IS the feeRecipient (same COA address), so balance math nets out. Fee recipient in production is separate from user wallet.",
+    "shielded_transfer_fee": "none — amount hidden, no fee possible without breaking privacy"
+  }
+}

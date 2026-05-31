@@ -7,7 +7,7 @@
   "chainId": 545,
   "contracts": {
     "JanusFlow_proxy": "0x09A3DCa868EcC39360fDe4E22046eCfcbA5b4078",
-    "JanusFlow_impl": "0xd6584cb2788D2eA5c3AB61fb72aa9fEaC27ae79D",
+    "JanusFlow_impl": "0x4F0914911C2f2beb7bFf6d060F3136bbd8c57943",
     "JanusFlow_impl_prior": "0x9321dF5884021D7E19Ad0EB5F582f8E2A70236eC",
     "AmountDiscloseVerifier": "0x9c83b2b1EFFD3bd375b9Bee93Cb618005D6A2Dc4",
     "ConfidentialTransferVerifier": "0x48f791D2a4992F448Cc36F12e5500b6553e969b3",

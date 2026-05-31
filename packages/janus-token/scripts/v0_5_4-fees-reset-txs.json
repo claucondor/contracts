@@ -1,0 +1,52 @@
+{
+  "version": "0.5.4-fees",
+  "date": "2026-05-31T00:01:54.979Z",
+  "purpose": "Reset 4 test wallets after JanusFlow v0.5.4-fees upgrade. Pre-fee commitments cleared; fresh start with 0.1% fee economics.",
+  "network": "flow-cadence-testnet + flow-evm-testnet",
+  "chainId": 545,
+  "evm_proxy": "0x09A3DCa868EcC39360fDe4E22046eCfcbA5b4078",
+  "evm_impl": "0x4F0914911C2f2beb7bFf6d060F3136bbd8c57943",
+  "resets": {
+    "alice": {
+      "cadence_address": "0x7599043aea001283",
+      "evm_coa": "0x0000000000000000000000022f6b30af48a94787",
+      "prior_commitment_x": "0",
+      "prior_commitment_y": "1",
+      "flow_tx": "e5396391c63f70c1540d2ff66a221a07b5310cce14e9ef9fda11ac8a84b3f51f",
+      "evm_tx": "0x31e1df819f276dd79734885215fb0fc3e19bdc017735dd5b5da5d910d9aa12a5",
+      "flow_tx_explorer": "https://testnet.flowscan.io/tx/e5396391c63f70c1540d2ff66a221a07b5310cce14e9ef9fda11ac8a84b3f51f",
+      "status": "SEALED"
+    },
+    "bob": {
+      "cadence_address": "0xd807a3992d7be612",
+      "evm_coa": "0x00000000000000000000000250d93efba617e0bf",
+      "prior_commitment_x": "0",
+      "prior_commitment_y": "1",
+      "flow_tx": "f185f5a6e2b617aaab7be7e3daa005fb1e6e8505b61ac6003dbf8518dfe348fe",
+      "evm_tx": "0x1afe310d6ada3a778ad48a2f5eb6f0ebaf6476898f99a339bfe40278e852a83e",
+      "flow_tx_explorer": "https://testnet.flowscan.io/tx/f185f5a6e2b617aaab7be7e3daa005fb1e6e8505b61ac6003dbf8518dfe348fe",
+      "status": "SEALED"
+    },
+    "dave": {
+      "cadence_address": "0xd32d9100e1fe983b",
+      "evm_coa": "0x0000000000000000000000027b94cfc8a64971cd",
+      "prior_commitment_x": "0",
+      "prior_commitment_y": "1",
+      "flow_tx": "8ea22cb079d00c69e1f18d3780b28aac2778cede6cd122c8f73e347d2bd50a30",
+      "evm_tx": "0x22e8cbab63a50ca96ad2fbcfcc2c16950fed9ca9f9f5c986235315935169b0fe",
+      "flow_tx_explorer": "https://testnet.flowscan.io/tx/8ea22cb079d00c69e1f18d3780b28aac2778cede6cd122c8f73e347d2bd50a30",
+      "status": "SEALED"
+    },
+    "c2": {
+      "cadence_address": "0x4fdd7244df4213c2",
+      "evm_coa": "0x00000000000000000000000286501f6722a3aede",
+      "prior_commitment_x": "0",
+      "prior_commitment_y": "1",
+      "flow_tx": "d3a134072ec857a412dd463a2c771f142fefcf1d21e4889351997c409bd495f7",
+      "evm_tx": "0x7fd0ddee20a98e418b08cdb6dbe0c47880f98b4f0ce709391c4b0451a12335bc",
+      "flow_tx_explorer": "https://testnet.flowscan.io/tx/d3a134072ec857a412dd463a2c771f142fefcf1d21e4889351997c409bd495f7",
+      "status": "SEALED"
+    }
+  },
+  "manual_steps_for_operator": "Clear localStorage for all 4 test wallets in DevTools: localStorage.clear() or remove keys starting with 'openjanus:'. Then re-setup MemoKey and wrap fresh — all slots start at identity point."
+}
