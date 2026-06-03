@@ -102,27 +102,30 @@ const commitment = await flow.balanceOfCommitment(coaEvmAddress);
 
 ## Deployed contracts (testnet)
 
+> **v0.6.4** — Multi-token sprint. MemoKeyRegistry unification, JanusFT generic wrapper,
+> all three EVM proxies at feeBps=10.
+
 ### TIER 1 — Primitive contracts (shared, canonical)
 
 | Contract | Network | Address |
 |---|---|---|
 | BabyJub.sol | Flow EVM testnet | `0x27139AFda7425f51F68D32e0A38b7D43BcB0f870` |
-| JanusFlow proxy (ERC1967 UUPS) | Flow EVM testnet | `0x09A3DCa868EcC39360fDe4E22046eCfcbA5b4078` |
+| AmountDiscloseVerifier | Flow EVM testnet | `0x9c83b2b1EFFD3bd375b9Bee93Cb618005D6A2Dc4` |
+| ConfidentialTransferVerifier | Flow EVM testnet | `0x48f791D2a4992F448Cc36F12e5500b6553e969b3` |
+| MemoKeyRegistry | Flow EVM testnet | `0x05D104962ff087441f26BA11A1E1C3b9E091D663` |
 
-### TIER 2 — Token + verifier contracts
+### TIER 2 — Token contracts (v0.6.4)
 
 | Contract | Network | Address |
 |---|---|---|
-| JanusFlow impl (v0.5.5-fees) | Flow EVM testnet | `0x0d54cf5560548A267EB31b4a90858c9b37e0C740` |
+| JanusFlow proxy (ERC1967 UUPS) | Flow EVM testnet | `0x2458ae2d26797c2ffa3B4f6612Bdc4aDf22b7156` |
+| JanusWFLOW proxy | Flow EVM testnet | `0x00129E94d5340bd19d0b4ed9CDf718BB6e0A9400` |
+| JanusMockUSDC proxy | Flow EVM testnet | `0xd45FDa099Cf67eD842eA379865AB08E18D62BAf3` |
 | Fee recipient (admin COA) | Flow EVM testnet | `0x0000000000000000000000022f6b30Af48A94787` |
-| AmountDiscloseVerifier | Flow EVM testnet | `0x9c83b2b1EFFD3bd375b9Bee93Cb618005D6A2Dc4` |
-| ConfidentialTransferVerifier | Flow EVM testnet | `0x48f791D2a4992F448Cc36F12e5500b6553e969b3` |
 | JanusFlow.cdc router | Flow Cadence testnet | `0x5dcbeb41055ec57e` |
-| JanusFTCadence | Flow Cadence testnet | `0xbef3c77681c15397` |
-| JanusERC20 proxy | Flow EVM testnet | `0xf2C04b1A32B815ac7Ffd87a4C312096592BBCa1e` |
-| JanusERC20 impl | Flow EVM testnet | `0x7FE0B05ED77E0540519B6f10DD4b4521e867590D` |
-| MockUSDC (test underlying — 6 decimals) | Flow EVM testnet | `0x3e8973dE565743Ef9748779bE377BBE050A13C22` |
-| Admin owner (COA, EVM) | Flow EVM testnet | `0x0000000000000000000000022f6b30af48a94787` |
+| JanusFT (generic Cadence wrapper) | Flow Cadence testnet | `0x7599043aea001283` |
+
+All EVM tokens: feeBps=10 (0.1%). All Cadence tokens: same fee model.
 
 Trusted setup: Hermez pot18 (200+ contributors) + one named phase-2
 contributor + Flow VRF beacon at testnet block `324,226,714`. Full provenance in
