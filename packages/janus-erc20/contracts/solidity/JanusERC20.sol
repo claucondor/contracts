@@ -1,15 +1,46 @@
 // SPDX-License-Identifier: MIT
 // EXPERIMENTAL — NOT AUDITED — DO NOT USE FOR PRODUCTION
 //
-// JanusERC20.sol — Confidential ERC20 wrapper.
-// Inherits JanusToken (abstract base).  MemoKey stored in shared MemoKeyRegistry.
+// JanusERC20.sol — Confidential ERC20 wrapper (v0.5).
+// Inherits JanusToken v0.3 (abstract base).
 //
-// Storage (extends JanusToken, slot 91+):
-//   slot  0..10  base state
-//   slot 11..89  __gap[79]
-//   slot 90      memoRegistry
-//   slot 91      underlying
-//   slot 92..111 __gapERC20[20]
+// v0.5 adds the following over v0.4:
+//   - 9-arg shieldedTransfer (selector 0x6218f5d9) — required by openjanus-sdk v0.6.3+
+//   - 6-arg wrap with encryptedSnapshot (WrapWithSnapshot event)
+//   - 9-arg unwrap with encryptedSnapshot (UnwrapWithSnapshot event)
+//   - firstSnapshotBlock mapping (per-user first-appearance block)
+//   - feeRecipient / feeBps / fee infrastructure
+//   - memoRegistry reference (shared MemoKeyRegistry)
+//   - ShieldedTransferWithSnapshot / WrapWithSnapshot / UnwrapWithSnapshot events
+//   - adminResetSlot (testnet only — UUPS owner guard)
+//
+// STORAGE LAYOUT — CRITICAL FOR UUPS COMPATIBILITY
+// -------------------------------------------------
+// The live proxy was deployed with JanusToken v0.3:
+//
+//   slot  0   babyJub
+//   slot  1   transferVerifier
+//   slot  2   amountDiscloseVerifier
+//   slot  3   commitments      mapping(address => Point)
+//   slot  4   totalSupplyCommitment.x
+//   slot  5   totalSupplyCommitment.y
+//   slot  6   totalLocked
+//   slot  7..46  __gap[40]    (JanusToken v0.3 reserved — NOT reordered here)
+//
+// JanusERC20 (v0.4, deployed):
+//   slot 47   underlying       address
+//   slot 48..86  __gapJanusERC20[39]
+//
+// JanusERC20 (v0.5, this file — UUPS upgrade target):
+//   slot 47   underlying       address        UNCHANGED
+//   slot 48   firstSnapshotBlock  mapping     NEW (consumes gap[0])
+//   slot 49   feeRecipient     address        NEW (consumes gap[1])
+//   slot 50   feeBps           uint16         NEW (consumes gap[2] — own slot for clarity)
+//   slot 51   memoRegistry     address        NEW (consumes gap[3])
+//   slot 52..86  __gapERC20[35]               REDUCED from 39 to 35
+//
+// The old 3-arg shieldedTransfer (selector 0x5764e916) and old wrap(uint256,...) remain
+// accessible via inherited JanusToken v0.3 — no breaking change for legacy callers.
 
 pragma solidity ^0.8.20;
 
@@ -23,17 +54,90 @@ interface IERC20 {
     function decimals() external view returns (uint8);
 }
 
+interface IMemoKeyRegistryV2 {
+    function getMemoKey(address user)
+        external
+        view
+        returns (uint256 x, uint256 y, uint256 publishedAt);
+}
+
 contract JanusERC20 is JanusToken {
-    uint256 public constant MAX_WRAP = type(uint128).max;
 
-    // slot 91 — Solidity places derived state after the full base layout
-    // (including the gap), so this lands at slot 91 regardless of gap size.
-    address public underlying;
-
-    uint256[20] private __gapERC20;
+    string  public constant VERSION  = "0.5.0";
+    uint256 public constant MAX_WRAP = 18_000_000_000_000_000_000;
 
     // -----------------------------------------------------------------------
-    // Initializer — for new proxies
+    // Storage — slots 47+ (JanusToken v0.3 uses slots 0-46)
+    // -----------------------------------------------------------------------
+
+    /// slot 47 — underlying ERC20 (EXISTING from v0.4 — must not move)
+    address public underlying;
+
+    /// slot 48 — first block a user appeared in a snapshot event (NEW in v0.5)
+    mapping(address => uint256) public firstSnapshotBlock;
+
+    /// slot 49 — fee destination address (NEW in v0.5)
+    address public feeRecipient;
+
+    /// slot 50 — fee basis points (100 = 1 %, max 100) (NEW in v0.5)
+    uint16  public feeBps;
+
+    /// slot 51 — shared MemoKeyRegistry (NEW in v0.5)
+    IMemoKeyRegistryV2 public memoRegistry;
+
+    /// slots 52..86 — reserved for future state (35 remaining after 4 consumed)
+    uint256[35] private __gapERC20;
+
+    // -----------------------------------------------------------------------
+    // Fee constants
+    // -----------------------------------------------------------------------
+
+    uint16 public constant MAX_FEE_BPS = 100;
+
+    // -----------------------------------------------------------------------
+    // Events
+    // -----------------------------------------------------------------------
+
+    event WrapWithSnapshot(
+        address indexed user,
+        uint256 amount,
+        bytes encryptedSnapshot,
+        uint256 ephPubkeyX,
+        uint256 ephPubkeyY
+    );
+
+    event ShieldedTransferWithSnapshot(
+        address indexed from,
+        address indexed to,
+        bytes encryptedSnapshotFrom,
+        uint256 ephPubkeyFromX,
+        uint256 ephPubkeyFromY,
+        bytes encryptedNoteTo,
+        uint256 ephPubkeyToX,
+        uint256 ephPubkeyToY
+    );
+
+    event UnwrapWithSnapshot(
+        address indexed user,
+        address indexed recipient,
+        uint256 amount,
+        bytes encryptedSnapshot,
+        uint256 ephPubkeyX,
+        uint256 ephPubkeyY
+    );
+
+    event FeeCollected(address indexed user, uint256 fee, string op);
+    event FeeRecipientChanged(address indexed oldRecipient, address indexed newRecipient);
+    event FeeBpsChanged(uint16 oldBps, uint16 newBps);
+    event MemoRegistrySet(address indexed registry);
+    event AdminSlotReset(
+        address indexed user,
+        uint256 priorCommitmentX,
+        uint256 priorCommitmentY
+    );
+
+    // -----------------------------------------------------------------------
+    // Initializer — for NEW proxies (not called on UUPS upgrade path)
     // -----------------------------------------------------------------------
 
     function initialize(
@@ -44,18 +148,77 @@ contract JanusERC20 is JanusToken {
         address _owner,
         address _memoRegistry
     ) external initializer {
-        require(_underlying != address(0), "JanusERC20: zero underlying");
-        __JanusToken_init(
-            _babyJub, _transferVerifier, _amountDiscloseVerifier, _owner, _memoRegistry
-        );
-        underlying = _underlying;
+        require(_underlying   != address(0), "JanusERC20: zero underlying");
+        require(_memoRegistry != address(0), "JanusERC20: zero memoRegistry");
+        __JanusToken_init(_babyJub, _transferVerifier, _amountDiscloseVerifier, _owner);
+        underlying   = _underlying;
+        memoRegistry = IMemoKeyRegistryV2(_memoRegistry);
     }
 
     // -----------------------------------------------------------------------
-    // Public wrap — NOT payable; amount is explicit.
+    // Admin — post-upgrade setters (owner-only)
+    // -----------------------------------------------------------------------
+
+    function setMemoRegistry(address _registry) external onlyOwner {
+        require(_registry != address(0), "JanusERC20: zero registry");
+        memoRegistry = IMemoKeyRegistryV2(_registry);
+        emit MemoRegistrySet(_registry);
+    }
+
+    function initFees(address recipient, uint16 bps) external onlyOwner {
+        require(
+            feeRecipient == address(0) && feeBps == 0,
+            "JanusERC20: fees already initialized"
+        );
+        require(recipient != address(0), "JanusERC20: zero feeRecipient");
+        require(bps <= MAX_FEE_BPS,     "JanusERC20: exceeds MAX_FEE_BPS");
+        feeRecipient = recipient;
+        feeBps = bps;
+        emit FeeRecipientChanged(address(0), recipient);
+        emit FeeBpsChanged(0, bps);
+    }
+
+    function setFeeRecipient(address newRecipient) external onlyOwner {
+        require(newRecipient != address(0), "JanusERC20: zero feeRecipient");
+        address old = feeRecipient;
+        feeRecipient = newRecipient;
+        emit FeeRecipientChanged(old, newRecipient);
+    }
+
+    function setFeeBps(uint16 newBps) external onlyOwner {
+        require(newBps <= MAX_FEE_BPS, "JanusERC20: exceeds MAX_FEE_BPS");
+        uint16 old = feeBps;
+        feeBps = newBps;
+        emit FeeBpsChanged(old, newBps);
+    }
+
+    function computeFee(uint256 grossAmount) public view returns (uint256) {
+        if (feeBps == 0 || feeRecipient == address(0)) return 0;
+        return (grossAmount * feeBps) / 10000;
+    }
+
+    // -----------------------------------------------------------------------
+    // Internal helpers
+    // -----------------------------------------------------------------------
+
+    function _recordFirstSnapshot(address account) internal {
+        if (firstSnapshotBlock[account] == 0) {
+            firstSnapshotBlock[account] = block.number;
+        }
+    }
+
+    function _calcFee(uint256 grossAmount) internal view returns (uint256 fee, uint256 net) {
+        if (feeBps == 0 || feeRecipient == address(0)) {
+            return (0, grossAmount);
+        }
+        fee = (grossAmount * feeBps) / 10000;
+        net = grossAmount - fee;
+    }
+
+    // -----------------------------------------------------------------------
+    // Public wrap — v0.6.3 signature with encryptedSnapshot (NEW SELECTOR)
     //
-    // Caller must approve this contract for `amount` (gross) of `underlying`
-    // before calling wrap().
+    // SDK calls: wrap(uint256,uint256[2],uint256[8],bytes,uint256,uint256)
     // -----------------------------------------------------------------------
 
     function wrap(
@@ -65,9 +228,8 @@ contract JanusERC20 is JanusToken {
         bytes calldata encryptedSnapshot,
         uint256 ephPubkeyX,
         uint256 ephPubkeyY
-    ) external payable {
-        require(msg.value == 0, "JanusERC20: msg.value must be zero");
-        require(amount > 0,     "JanusERC20: zero wrap");
+    ) external {
+        require(amount > 0, "JanusERC20: zero wrap");
         _recordFirstSnapshot(msg.sender);
 
         bool okPull = IERC20(underlying).transferFrom(msg.sender, address(this), amount);
@@ -87,7 +249,9 @@ contract JanusERC20 is JanusToken {
     }
 
     // -----------------------------------------------------------------------
-    // Public unwrap
+    // Public unwrap — v0.6.3 signature with encryptedSnapshot (NEW SELECTOR)
+    //
+    // SDK calls: unwrap(uint256,address,uint256[2],uint256[8],uint256[6],uint256[8],bytes,uint256,uint256)
     // -----------------------------------------------------------------------
 
     function unwrap(
@@ -104,6 +268,57 @@ contract JanusERC20 is JanusToken {
         _recordFirstSnapshot(msg.sender);
         _unwrap(claimedAmount, recipient, txCommit, amountProof, transferPublicInputs, transferProof);
         emit UnwrapWithSnapshot(msg.sender, recipient, claimedAmount, encryptedSnapshot, ephPubkeyX, ephPubkeyY);
+    }
+
+    // -----------------------------------------------------------------------
+    // 9-arg shieldedTransfer — v0.6.3 signature (NEW SELECTOR 0x6218f5d9)
+    //
+    // SDK calls: shieldedTransfer(address,uint256[6],uint256[8],bytes,uint256,uint256,bytes,uint256,uint256)
+    // -----------------------------------------------------------------------
+
+    function shieldedTransfer(
+        address to,
+        uint256[6] calldata publicInputs,
+        uint256[8] calldata proof,
+        bytes calldata encryptedSnapshot,
+        uint256 ephPubkeyX,
+        uint256 ephPubkeyY,
+        bytes calldata encryptedNoteTo,
+        uint256 ephPubkeyToX,
+        uint256 ephPubkeyToY
+    ) external {
+        require(to != address(0), "JanusERC20: transfer to zero address");
+        require(to != msg.sender, "JanusERC20: cannot transfer to self");
+
+        _recordFirstSnapshot(msg.sender);
+        _recordFirstSnapshot(to);
+
+        Point memory senderCommit = _effectiveCommitment(msg.sender);
+        require(
+            publicInputs[0] == senderCommit.x && publicInputs[1] == senderCommit.y,
+            "JanusERC20: C_old mismatch"
+        );
+
+        require(
+            _verifyTransferProof(publicInputs, proof),
+            "JanusERC20: invalid transfer proof"
+        );
+
+        commitments[msg.sender] = Point({ x: publicInputs[4], y: publicInputs[5] });
+
+        Point memory recvCommit = _effectiveCommitment(to);
+        (uint256 rx, uint256 ry) = babyJub.babyAdd(
+            recvCommit.x, recvCommit.y,
+            publicInputs[2], publicInputs[3]
+        );
+        commitments[to] = Point({ x: rx, y: ry });
+
+        emit ConfidentialTransfer(msg.sender, to);
+        emit ShieldedTransferWithSnapshot(
+            msg.sender, to,
+            encryptedSnapshot, ephPubkeyX, ephPubkeyY,
+            encryptedNoteTo, ephPubkeyToX, ephPubkeyToY
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -183,11 +398,45 @@ contract JanusERC20 is JanusToken {
     }
 
     // -----------------------------------------------------------------------
+    // TESTNET-ONLY — adminResetSlot
+    // -----------------------------------------------------------------------
+
+    uint256 private constant FLOW_EVM_TESTNET_CHAIN_ID = 545;
+
+    function adminResetSlot(address user) external onlyOwner {
+        require(
+            block.chainid == FLOW_EVM_TESTNET_CHAIN_ID,
+            "JanusERC20: adminResetSlot is testnet-only (chainId 545)"
+        );
+        require(user != address(0), "JanusERC20: zero user");
+
+        Point storage slot = commitments[user];
+        uint256 priorX = slot.x;
+        uint256 priorY = slot.y;
+
+        slot.x = 0;
+        slot.y = 1;
+
+        firstSnapshotBlock[user] = 0;
+
+        emit AdminSlotReset(user, priorX, priorY);
+    }
+
+    // -----------------------------------------------------------------------
     // View helpers
     // -----------------------------------------------------------------------
 
     function underlyingBalance() external view returns (uint256) {
         return IERC20(underlying).balanceOf(address(this));
+    }
+
+    function getMemoKeyFromRegistry(address user)
+        public
+        view
+        returns (uint256 x, uint256 y)
+    {
+        require(address(memoRegistry) != address(0), "JanusERC20: memoRegistry not set");
+        (x, y, ) = memoRegistry.getMemoKey(user);
     }
 }
 

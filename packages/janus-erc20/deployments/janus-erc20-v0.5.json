@@ -1,0 +1,45 @@
+{
+  "version": "0.5.0",
+  "date": "2026-06-03",
+  "network": "flow-evm-testnet",
+  "chainId": 545,
+  "contracts": {
+    "JanusERC20_proxy": "0xf2C04b1A32B815ac7Ffd87a4C312096592BBCa1e",
+    "JanusERC20_impl_prev": "0x7FE0B05ED77E0540519B6f10DD4b4521e867590D",
+    "JanusERC20_impl": "0x10348fc1e29751B79EDAd427d1098bC83B10028D",
+    "MemoKeyRegistry": "0x05D104962ff087441f26BA11A1E1C3b9E091D663",
+    "MockUSDC_underlying": "0x3e8973dE565743Ef9748779bE377BBE050A13C22"
+  },
+  "contract_status": {
+    "JanusERC20_proxy": "EXISTING -- UUPS upgraded from v0.4 to v0.5",
+    "JanusERC20_impl": "NEW (v0.5 -- adds 9-arg shieldedTransfer selector 0x6218f5d9, 6-arg wrap, 9-arg unwrap, fees, firstSnapshotBlock, memoRegistry)",
+    "MemoKeyRegistry": "EXISTING -- wired via setMemoRegistry post-upgrade"
+  },
+  "tx_hashes": {
+    "janus_erc20_impl_deploy": "ea44cf16d72b6bd9ed3428ba3702c8decdc962a57296f8fb8001f9095ab3397a",
+    "proxy_upgrade": "38e8b90c303130a899262ce1ea01e164331424a1f75a297820036a5c4c785fbc",
+    "set_memo_registry": "e8c1c99c41e213f4382e441b6d4be8f4f52e9aa1bb6536dd8eb0b2688f6d668e"
+  },
+  "owner": "0x0000000000000000000000022f6b30af48a94787",
+  "deployer_flow_account": "0xbef3c77681c15397",
+  "deployer_coa_evm": "0x0000000000000000000000022f6b30af48a94787",
+  "upgrade_method": "UUPS upgradeToAndCall via openjanus-flow COA (P-256 Flow signing)",
+  "post_upgrade_checks": {
+    "impl_slot_matches": true,
+    "version": "0.5.0",
+    "memo_registry_set": true,
+    "shielded_transfer_9arg": "selector 0x6218f5d9 present -- reverts with JanusERC20: C_old mismatch (proof-related, not selector-not-found)",
+    "wrap_6arg": "selector present -- reverts with MockUSDC: insufficient as expected",
+    "firstSnapshotBlock_getter": "returns 0 as expected",
+    "feeBps": "0 (fees not initialized -- feeRecipient slot49 empty until initFees called)"
+  },
+  "explorer": {
+    "proxy": "https://evm-testnet.flowscan.io/address/0xf2C04b1A32B815ac7Ffd87a4C312096592BBCa1e",
+    "impl": "https://evm-testnet.flowscan.io/address/0x10348fc1e29751B79EDAd427d1098bC83B10028D"
+  },
+  "notes": {
+    "storage_compatibility": "underlying stays at slot 47 (unchanged). firstSnapshotBlock/feeRecipient/feeBps/memoRegistry added at slots 48-51 (formerly zero gap slots). No storage collision.",
+    "janusflow_not_affected": "JanusFlow proxy (0x2458ae2d26797c2ffa3B4f6612Bdc4aDf22b7156) was already on v0.6.3 with 9-arg shieldedTransfer. No upgrade needed.",
+    "legacy_selectors": "Old 3-arg shieldedTransfer (0x5764e916) and 3-arg wrap remain accessible via inherited JanusToken v0.3 base."
+  }
+}
