@@ -1,7 +1,7 @@
 {
   "date": "2026-05-27T11:26:03.156Z",
   "proxy": "0xf2C04b1A32B815ac7Ffd87a4C312096592BBCa1e",
-  "underlying": "0x3e8973dE565743Ef9748779bE377BBE050A13C22",
+  "underlying": "0x8405E8831737aE72204c271581b7d4fAD9f622bE",
   "steps": {
     "summary": {
       "mint": "Alice minted 100 mUSDC",
