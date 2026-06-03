@@ -110,8 +110,8 @@ const commitment = await flow.balanceOfCommitment(coaEvmAddress);
 | Contract | Network | Address |
 |---|---|---|
 | BabyJub.sol | Flow EVM testnet | `0x27139AFda7425f51F68D32e0A38b7D43BcB0f870` |
-| AmountDiscloseVerifier | Flow EVM testnet | `0x9c83b2b1EFFD3bd375b9Bee93Cb618005D6A2Dc4` |
-| ConfidentialTransferVerifier | Flow EVM testnet | `0x48f791D2a4992F448Cc36F12e5500b6553e969b3` |
+| AmountDiscloseVerifier | Flow EVM testnet | `0xD0ED3936530258C278f5357C1dB709ad34768352` |
+| ConfidentialTransferVerifier | Flow EVM testnet | `0x84852aF72D2EF2A0A937e8Dae0BFA482E707E39B` |
 | MemoKeyRegistry | Flow EVM testnet | `0x05D104962ff087441f26BA11A1E1C3b9E091D663` |
 
 ### TIER 2 — Token contracts (v0.6.4)

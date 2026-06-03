@@ -6,7 +6,7 @@
   "contracts": {
     "JanusERC20_proxy": "0xf2C04b1A32B815ac7Ffd87a4C312096592BBCa1e",
     "JanusERC20_impl": "0x7FE0B05ED77E0540519B6f10DD4b4521e867590D",
-    "MockUSDC": "0x3e8973dE565743Ef9748779bE377BBE050A13C22",
+    "MockUSDC": "0x8405E8831737aE72204c271581b7d4fAD9f622bE",
     "AmountDiscloseVerifier": "0xD0ED3936530258C278f5357C1dB709ad34768352",
     "ConfidentialTransferVerifier": "0x84852aF72D2EF2A0A937e8Dae0BFA482E707E39B",
     "BabyJub": "0x27139AFda7425f51F68D32e0A38b7D43BcB0f870"
@@ -30,7 +30,7 @@
   "deploy_method": "coa.deploy() via Cadence transaction (P-256 Flow signing)",
   "upgradability": "UUPS (proxy.upgradeToAndCall, gated by _authorizeUpgrade onlyOwner)",
   "underlying": {
-    "address": "0x3e8973dE565743Ef9748779bE377BBE050A13C22",
+    "address": "0x8405E8831737aE72204c271581b7d4fAD9f622bE",
     "symbol": "mUSDC",
     "decimals": 6,
     "note": "Flow EVM testnet lacks a canonical USDC — this is a permissionlessly-mintable test token. Replace with a real ERC20 address for mainnet."
@@ -46,6 +46,6 @@
   "explorer": {
     "proxy": "https://evm-testnet.flowscan.io/address/0xf2C04b1A32B815ac7Ffd87a4C312096592BBCa1e",
     "impl": "https://evm-testnet.flowscan.io/address/0x7FE0B05ED77E0540519B6f10DD4b4521e867590D",
-    "mock_usdc": "https://evm-testnet.flowscan.io/address/0x3e8973dE565743Ef9748779bE377BBE050A13C22"
+    "mock_usdc": "https://evm-testnet.flowscan.io/address/0x8405E8831737aE72204c271581b7d4fAD9f622bE"
   }
 }
