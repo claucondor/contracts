@@ -1,7 +1,7 @@
 {
   "name": "@claucondor/janus-erc20",
-  "version": "0.4.0",
-  "description": "JanusERC20 — confidential-amount wrapper for an ERC20 underlying on Flow EVM (UUPS-upgradeable, extends JanusToken abstract base).",
+  "version": "0.6.4",
+  "description": "JanusERC20 — confidential-amount wrapper for any ERC20 underlying on Flow EVM (UUPS-upgradeable, extends JanusToken abstract base, shared MemoKeyRegistry, v0.6.4).",
   "type": "module",
   "scripts": {
     "compile": "hardhat compile --config hardhat.config.cjs",

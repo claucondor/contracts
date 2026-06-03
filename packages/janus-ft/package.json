@@ -1,7 +1,7 @@
 {
   "name": "@claucondor/janus-ft",
-  "version": "0.4.0",
-  "description": "JanusFT — pure-Cadence confidential-amount wrapper for any FungibleToken vault on Flow (lab-grade — stub crypto; cross-VM proof verification arrives in v0.5).",
+  "version": "0.6.4",
+  "description": "JanusFT — generic Cadence confidential-amount wrapper for any FungibleToken vault on Flow. Real cross-VM BabyJub + Groth16 ZK. Production v0.6.4.",
   "type": "module",
   "scripts": {
     "deploy": "node --experimental-vm-modules scripts/deploy-janus-ft.mjs",

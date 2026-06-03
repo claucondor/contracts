@@ -1,54 +1,60 @@
 // SPDX-License-Identifier: MIT
 // EXPERIMENTAL — NOT AUDITED — DO NOT USE FOR PRODUCTION
 //
-// JanusToken.sol — Abstract base for openjanus confidential tokens (v0.3).
+// JanusToken.sol — Abstract base for all Janus confidential tokens.
 //
-// This is the *template* that defines the on-chain shape of every confidential
-// token in the openjanus stack:
+// Track B++ architectural fix: replaces per-token memoKeyPubX/memoKeyPubY
+// mappings with a shared MemoKeyRegistry contract.  All Janus EVM tokens now
+// read from one source of truth.  SDK routes publishMemoKey() calls directly
+// to the registry; the Janus token no longer exposes publishMemoKey() itself.
 //
-//   - Hidden per-account balance commitments (BabyJubJub Pedersen).
-//   - Hidden total-supply commitment (homomorphic sum of per-account commits).
-//   - Cleartext aggregate custody accounting (`totalLocked`) — VISIBLE BY DESIGN
-//     so observers can audit the size of the shielded pool.
-//   - A shielded transfer that hides amount on all channels (calldata, events,
-//     storage) gated by a Groth16 ConfidentialTransfer proof.
-//   - Abstract `_wrap` / `_unwrap` template-method hooks that concrete tokens
-//     (e.g. JanusFlow for native FLOW) implement to plug in the underlying
-//     asset's custody logic.
+// STORAGE LAYOUT — CRITICAL — UUPS COMPATIBILITY
+// -----------------------------------------------
+// The live proxies (JanusFlow / JanusWFLOW / JanusMockUSDC) were deployed with
+// JanusToken_v0_6 layout (fresh-deploy single-gap):
 //
-// Concrete tokens MUST:
+//   slot  0    babyJub                  address
+//   slot  1    transferVerifier         address
+//   slot  2    amountDiscloseVerifier   address
+//   slot  3    commitments              mapping(address => Point)
+//   slot  4-5  totalSupplyCommitment    Point
+//   slot  6    totalLocked              uint256
+//   slot  7    memoKeyPubX              mapping(address => uint256)   <= DEPRECATED
+//   slot  8    memoKeyPubY              mapping(address => uint256)   <= DEPRECATED
+//   slot  9    firstSnapshotBlock       mapping(address => uint256)
+//   slot 10    feeRecipient + feeBps    packed (address 20B + uint16 2B)
+//   slot 11..90  __gap[80]              uint256[80]
 //
-//   - Implement `_wrap(amount, txCommit, amountProof)` to take custody of
-//     `amount` of the underlying asset and bind it to `txCommit` via the
-//     AmountDiscloseVerifier.
-//   - Implement `_unwrap(claimedAmount, recipient, txCommit, amountProof,
-//     transferPublicInputs, transferProof)` to release `claimedAmount` of the
-//     underlying asset to `recipient` after verifying both proofs.
-//   - Call `_acceptShieldedCredit(account, txCommit)` from inside `_wrap` after
-//     verifying the amount-disclose proof and (optionally) updating custody.
-//   - Call `_processShieldedDebit(account, txCommit, transferPublicInputs)`
-//     from inside `_unwrap` after verifying both proofs.
+// SLOTS 7 AND 8 ARE PRESERVED (declared as DEPRECATED mappings).
+// DO NOT REMOVE or reorder them — UUPS storage layout must be byte-compatible.
+// New state (memoRegistry) is appended at the tail of __gap, shrinking __gap
+// from [80] to [79] (one slot consumed).  This is the safe, canonical OZ
+// pattern for adding state to upgraded implementations.
 //
-// Cryptographic dependencies (deployed primitive addresses, set in `__JanusToken_init`):
+// After v0.6.3 upgrade the __gap occupies slots 11..89 (79 slots) and
+// memoRegistry occupies slot 90.
 //
-//   - BabyJub.sol                  — twisted Edwards point arithmetic.
-//   - ConfidentialTransferVerifier — Groth16 verifier for the v2 transfer circuit.
-//   - AmountDiscloseVerifier       — Groth16 verifier binding a Pedersen commit
-//                                    to a PUBLIC scalar amount.
+// VERIFYING SLOT 90:
+//   In JanusToken_v0_6: base __gap[80] spans slots 11..90
+//                        (11 + 80 - 1 = 90, zero-indexed = 11 to 90).
+//   In JanusToken_v0_6_3: __gap[79] spans slots 11..89; memoRegistry at 90.
+//   Both leave slots 0..90 occupied; concrete subclasses continue at slot 91+.
 //
-// Storage layout:
+// Concrete subclasses MUST NOT add state between the base slots and their own
+// first variable — the gap absorbs additions.
 //
-//   slot 0 .. 49 (UUPS + Ownable) — managed by OpenZeppelin upgradeable mixins.
-//   slot 50      — IBabyJub babyJub
-//   slot 51      — IConfidentialTransferVerifier transferVerifier
-//   slot 52      — IAmountDiscloseVerifier        amountDiscloseVerifier
-//   slot 53..    — mapping(address => Point) commitments
-//                 Point totalSupplyCommitment
-//                 uint256 totalLocked
-//   slot N + __gap[40]  — reserved for future state.
+// UPGRADE PATTERN (for 3 proxies):
+//   1. Deploy new JanusFlow_v0_6_3 / JanusERC20_v0_6_3 impl (no init needed).
+//   2. Call proxy.upgradeToAndCall(newImpl, "0x") from proxy owner COA.
+//   3. After upgrade, memoRegistry auto-reads from slot 90 — but slot 90 was
+//      part of the old __gap and is zero.  Therefore memoRegistry starts as
+//      address(0) until we call _setMemoRegistry().
+//   4. Call setMemoRegistry(MEMO_REGISTRY_ADDRESS) from owner (one-shot or
+//      mutable setter with owner guard).
 //
-// Concrete subclasses MUST NOT reorder existing storage or remove __gap entries
-// without coordinating a synchronized storage migration.
+// Note: _setMemoRegistry is a separate owner-only call post-upgrade, not part
+// of upgradeToAndCall, because UUPS upgradeToAndCall data would need to be
+// signed by the COA owner and the encoding is straightforward to do separately.
 
 pragma solidity ^0.8.20;
 
@@ -57,7 +63,7 @@ import {OwnableUpgradeable}   from "@openzeppelin/contracts-upgradeable/access/O
 import {Initializable}        from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 // ---------------------------------------------------------------------------
-// External verifier / curve interfaces (shape pinned by the lab deployments)
+// External verifier / curve interfaces
 // ---------------------------------------------------------------------------
 
 interface IBabyJub {
@@ -87,8 +93,15 @@ interface IAmountDiscloseVerifier {
     ) external view returns (bool);
 }
 
+interface IMemoKeyRegistry {
+    function getMemoKey(address user)
+        external
+        view
+        returns (uint256 x, uint256 y, uint256 publishedAt);
+}
+
 // ---------------------------------------------------------------------------
-// JanusToken — abstract base
+// JanusToken_v0_6_3 — abstract base (B++ upgrade)
 // ---------------------------------------------------------------------------
 
 abstract contract JanusToken is
@@ -106,58 +119,112 @@ abstract contract JanusToken is
     }
 
     // -----------------------------------------------------------------------
-    // Storage — see file-header note about slot stability
+    // Storage — must be byte-compatible with JanusToken_v0_6 layout.
+    //
+    //   slot  0  babyJub
+    //   slot  1  transferVerifier
+    //   slot  2  amountDiscloseVerifier
+    //   slot  3  commitments
+    //   slot  4  totalSupplyCommitment.x
+    //   slot  5  totalSupplyCommitment.y
+    //   slot  6  totalLocked
+    //   slot  7  memoKeyPubX   DEPRECATED: read from memoRegistry instead
+    //   slot  8  memoKeyPubY   DEPRECATED: read from memoRegistry instead
+    //   slot  9  firstSnapshotBlock
+    //   slot 10  feeRecipient (20B) + feeBps (2B)  packed
+    //   slot 11..89  __gap[79]
+    //   slot 90  memoRegistry   <-- NEW in v0.6.3 (tail of former __gap[80])
+    //
+    // Concrete subclasses (JanusERC20_v0_6_3, JanusFlow_v0_6_3) continue at
+    // slot 91+ (same as in v0.6 — no shift).
     // -----------------------------------------------------------------------
 
-    IBabyJub                       public babyJub;
-    IConfidentialTransferVerifier  public transferVerifier;
-    IAmountDiscloseVerifier        public amountDiscloseVerifier;
+    IBabyJub                       public babyJub;                  // slot 0
+    IConfidentialTransferVerifier  public transferVerifier;         // slot 1
+    IAmountDiscloseVerifier        public amountDiscloseVerifier;   // slot 2
 
-    /// Hidden per-account balance commitment (BabyJubJub point). Identity
-    /// element (0, 1) means zero balance; uninitialised storage (0, 0) is
-    /// treated as identity by `_effectiveCommitment`.
-    mapping(address => Point) public commitments;
+    mapping(address => Point) public commitments;                   // slot 3
 
-    /// Homomorphic sum of all `commitments[account]` — invariant:
-    /// `totalSupplyCommitment == sum(commitments[a] for all a)`.
-    Point public totalSupplyCommitment;
+    Point public totalSupplyCommitment;                             // slot 4-5
 
-    /// Aggregate cleartext custody pool. Tracks the underlying asset locked
-    /// in the contract across all users. VISIBLE BY DESIGN — boundary
-    /// accounting that an external observer can audit at any time.
-    uint256 public totalLocked;
+    uint256 public totalLocked;                                     // slot 6
 
-    /// Reserved storage for future state vars. Decrement when adding fields
-    /// to keep layout stable across upgrades.
-    uint256[40] private __gap;
+    // DEPRECATED: these mappings are NOT removed — slots 7 and 8 must stay
+    // in the same position for UUPS storage compatibility with the live proxies.
+    // Existing legacy data in these slots is orphaned (ignored by v0.6.3 logic).
+    // New memo key data is read exclusively from memoRegistry (slot 90).
+    mapping(address => uint256) public memoKeyPubX; // slot 7 — DEPRECATED
+    mapping(address => uint256) public memoKeyPubY; // slot 8 — DEPRECATED
+
+    mapping(address => uint256) public firstSnapshotBlock;          // slot 9
+
+    address public feeRecipient;                                    // slot 10, offset 0
+    uint16  public feeBps;                                          // slot 10, offset 20
+
+    /// Reserved storage — shrunk from [80] to [79] to accommodate memoRegistry.
+    uint256[79] private __gap;                                      // slot 11..89
+
+    /// Shared MemoKeyRegistry — single source of truth for all Janus EVM tokens.
+    /// Occupies slot 90 (formerly the last slot of __gap[80]).
+    IMemoKeyRegistry public memoRegistry;                           // slot 90
+
+    // -----------------------------------------------------------------------
+    // Fee constants
+    // -----------------------------------------------------------------------
+
+    uint16 public constant MAX_FEE_BPS = 100;
 
     // -----------------------------------------------------------------------
     // Events
     // -----------------------------------------------------------------------
 
-    /// VISIBLE BY DESIGN — boundary leak: discloses the wrap amount.
     event Wrapped(address indexed user, uint256 amount);
-
-    /// VISIBLE BY DESIGN — boundary leak: discloses the unwrap amount and
-    /// recipient.
     event Unwrapped(address indexed user, address indexed recipient, uint256 amount);
-
-    /// HIDDEN — emits no amount data, matching the ERC-7984 confidential
-    /// transfer event.
     event ConfidentialTransfer(address indexed from, address indexed to);
 
-    /// TESTNET-ONLY: emitted when `adminResetSlot` wipes a user's per-account
-    /// commitment back to the identity point. PRIVACY-BREAKING side effect:
-    /// observers learn that `user` had a stuck/abandoned slot AND that any
-    /// future commitment they publish is fresh (no homomorphic baggage).
+    /// Emitted when the shared registry address is configured.
+    event MemoRegistrySet(address indexed registry);
+
+    event WrapWithSnapshot(
+        address indexed user,
+        uint256 amount,
+        bytes encryptedSnapshot,
+        uint256 ephPubkeyX,
+        uint256 ephPubkeyY
+    );
+
+    event ShieldedTransferWithSnapshot(
+        address indexed from,
+        address indexed to,
+        bytes encryptedSnapshotFrom,
+        uint256 ephPubkeyFromX,
+        uint256 ephPubkeyFromY,
+        bytes encryptedNoteTo,
+        uint256 ephPubkeyToX,
+        uint256 ephPubkeyToY
+    );
+
+    event UnwrapWithSnapshot(
+        address indexed user,
+        address indexed recipient,
+        uint256 amount,
+        bytes encryptedSnapshot,
+        uint256 ephPubkeyX,
+        uint256 ephPubkeyY
+    );
+
     event AdminSlotReset(
         address indexed user,
         uint256 priorCommitmentX,
         uint256 priorCommitmentY
     );
 
+    event FeeCollected(address indexed user, uint256 fee, string op);
+    event FeeRecipientChanged(address indexed oldRecipient, address indexed newRecipient);
+    event FeeBpsChanged(uint16 oldBps, uint16 newBps);
+
     // -----------------------------------------------------------------------
-    // Initializer
+    // Initializer (for new proxies — not used in UUPS upgrade path)
     // -----------------------------------------------------------------------
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -165,18 +232,18 @@ abstract contract JanusToken is
         _disableInitializers();
     }
 
-    /// @notice One-shot initializer for the abstract base.
-    /// Concrete tokens MUST call this from their own `initialize`.
     function __JanusToken_init(
         address _babyJub,
         address _transferVerifier,
         address _amountDiscloseVerifier,
-        address _owner
+        address _owner,
+        address _memoRegistry
     ) internal onlyInitializing {
         require(_babyJub                != address(0), "JanusToken: zero babyJub");
         require(_transferVerifier       != address(0), "JanusToken: zero transferVerifier");
         require(_amountDiscloseVerifier != address(0), "JanusToken: zero amountDiscloseVerifier");
         require(_owner                  != address(0), "JanusToken: zero owner");
+        require(_memoRegistry           != address(0), "JanusToken: zero memoRegistry");
 
         __Ownable_init(_owner);
         __UUPSUpgradeable_init();
@@ -184,60 +251,103 @@ abstract contract JanusToken is
         babyJub                = IBabyJub(_babyJub);
         transferVerifier       = IConfidentialTransferVerifier(_transferVerifier);
         amountDiscloseVerifier = IAmountDiscloseVerifier(_amountDiscloseVerifier);
+        memoRegistry           = IMemoKeyRegistry(_memoRegistry);
 
         totalSupplyCommitment = Point({ x: 0, y: 1 });
     }
 
-    /// @dev UUPS upgrade authorization — owner only.
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 
     // -----------------------------------------------------------------------
-    // !!! TESTNET-ONLY — REMOVE BEFORE MAINNET !!!
+    // Registry admin
     //
-    // See MAINNET-PREPARE-CHECKLIST.md (entry 1) in the package root.
-    // The chainid guard below makes this inert on any chain != 545, but a
-    // mainnet build MUST delete the function entirely (or replace with a
-    // time-locked + governance-gated variant) to avoid shipping a
-    // privacy-breaking escape hatch.
-    //
-    // adminResetSlot — TESTNET-ONLY commitment recovery
+    // setMemoRegistry is the post-upgrade setter called by the proxy owner
+    // after upgradeToAndCall completes (slot 90 is zero until this is called).
     // -----------------------------------------------------------------------
-    //
-    // TESTNET-ONLY function for recovering slots that have become unusable
-    // because a client wrote a commitment without retaining the corresponding
-    // blinding factor (so the next `shieldedTransfer` proof can never match
-    // the on-chain `C_old`).
-    //
-    // WARNING — PRIVACY-BREAKING. This function:
-    //   * lets the contract owner zero out ANY user's per-account commitment;
-    //   * leaks (via the AdminSlotReset event) the prior commitment point;
-    //   * intentionally does NOT touch totalSupplyCommitment, so the homomorphic
-    //     invariant `totalSupplyCommitment == sum(commitments[a])` is BROKEN
-    //     after a reset. The shielded pool's audit trail no longer balances.
-    //
-    // The chainid guard hardcodes Flow EVM testnet (chainId 545) and reverts on
-    // any other chain. Removing or weakening that check before mainnet
-    // deployment would silently hand the owner an arbitrary commitment-wipe
-    // capability.
 
-    /// Flow EVM testnet chain id (https://developers.flow.com/evm/networks).
+    /// @notice Configure (or update) the shared MemoKeyRegistry address.
+    /// @dev Owner-only.  Called once after UUPS upgrade to wire in the registry.
+    function setMemoRegistry(address _registry) external onlyOwner {
+        require(_registry != address(0), "JanusToken: zero registry");
+        memoRegistry = IMemoKeyRegistry(_registry);
+        emit MemoRegistrySet(_registry);
+    }
+
+    // -----------------------------------------------------------------------
+    // MemoKey READ helper (replaces direct mapping reads)
+    // -----------------------------------------------------------------------
+
+    /// @notice Read the caller's registered BabyJub pubkey from the shared registry.
+    /// @dev Returns (0,0) if not registered.
+    function getMemoKeyFromRegistry(address user)
+        public
+        view
+        returns (uint256 x, uint256 y)
+    {
+        require(address(memoRegistry) != address(0), "JanusToken: memoRegistry not set");
+        (x, y, ) = memoRegistry.getMemoKey(user);
+    }
+
+    // -----------------------------------------------------------------------
+    // Internal snapshot-block helper
+    // -----------------------------------------------------------------------
+
+    function _recordFirstSnapshot(address account) internal {
+        if (firstSnapshotBlock[account] == 0) {
+            firstSnapshotBlock[account] = block.number;
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Fee admin
+    // -----------------------------------------------------------------------
+
+    function initFees(address recipient, uint16 bps) external onlyOwner {
+        require(
+            feeRecipient == address(0) && feeBps == 0,
+            "JanusToken: fees already initialized"
+        );
+        require(recipient != address(0), "JanusToken: zero feeRecipient");
+        require(bps <= MAX_FEE_BPS, "JanusToken: exceeds MAX_FEE_BPS");
+        feeRecipient = recipient;
+        feeBps = bps;
+        emit FeeRecipientChanged(address(0), recipient);
+        emit FeeBpsChanged(0, bps);
+    }
+
+    function setFeeRecipient(address newRecipient) external onlyOwner {
+        require(newRecipient != address(0), "JanusToken: zero feeRecipient");
+        address old = feeRecipient;
+        feeRecipient = newRecipient;
+        emit FeeRecipientChanged(old, newRecipient);
+    }
+
+    function setFeeBps(uint16 newBps) external onlyOwner {
+        require(newBps <= MAX_FEE_BPS, "JanusToken: exceeds MAX_FEE_BPS");
+        uint16 old = feeBps;
+        feeBps = newBps;
+        emit FeeBpsChanged(old, newBps);
+    }
+
+    function computeFee(uint256 grossAmount) public view returns (uint256) {
+        if (feeBps == 0 || feeRecipient == address(0)) return 0;
+        return (grossAmount * feeBps) / 10000;
+    }
+
+    function _calcFee(uint256 grossAmount) internal view returns (uint256 fee, uint256 net) {
+        if (feeBps == 0 || feeRecipient == address(0)) {
+            return (0, grossAmount);
+        }
+        fee = (grossAmount * feeBps) / 10000;
+        net = grossAmount - fee;
+    }
+
+    // -----------------------------------------------------------------------
+    // TESTNET-ONLY — adminResetSlot
+    // -----------------------------------------------------------------------
+
     uint256 private constant FLOW_EVM_TESTNET_CHAIN_ID = 545;
 
-    /// @notice TESTNET-ONLY: reset `user`'s commitment slot to the identity
-    /// point so they can wrap fresh with a brand-new blinding chain.
-    /// @dev PRIVACY-BREAKING — must never be deployable on mainnet. The
-    /// `require(block.chainid == 545)` guard reverts every call on any chain
-    /// other than Flow EVM testnet (chainId 545), so even if this impl is
-    /// accidentally pointed at mainnet via a proxy upgrade, the function is
-    /// inert. The owner check is enforced by `onlyOwner`.
-    ///
-    /// Side effects:
-    ///   * `commitments[user]` is overwritten with identity (0, 1).
-    ///   * `totalSupplyCommitment` is INTENTIONALLY NOT updated — the protocol
-    ///     invariant is broken on purpose; this is a recovery-only escape
-    ///     hatch, not a normal-path operation.
-    ///   * `totalLocked` is INTENTIONALLY NOT updated — the underlying asset
-    ///     custody is independent of per-account commitments.
     function adminResetSlot(address user) external virtual onlyOwner {
         require(
             block.chainid == FLOW_EVM_TESTNET_CHAIN_ID,
@@ -251,6 +361,8 @@ abstract contract JanusToken is
 
         slot.x = 0;
         slot.y = 1;
+
+        firstSnapshotBlock[user] = 0;
 
         emit AdminSlotReset(user, priorX, priorY);
     }
@@ -277,21 +389,25 @@ abstract contract JanusToken is
     }
 
     // -----------------------------------------------------------------------
-    // shieldedTransfer — concrete; amount HIDDEN on calldata, events, storage
+    // shieldedTransfer — reads memo key from registry for recipient note
     // -----------------------------------------------------------------------
 
-    /// @notice Move a hidden amount from `msg.sender` to `to`.
-    /// @dev    Public inputs layout (uint256[6]):
-    ///         [0..1] C_old   — sender's current commitment (must match storage)
-    ///         [2..3] C_tx    — Pedersen commit of the transferred amount
-    ///         [4..5] C_new   — sender's new commitment (C_old − C_tx)
     function shieldedTransfer(
         address to,
         uint256[6] calldata publicInputs,
-        uint256[8] calldata proof
+        uint256[8] calldata proof,
+        bytes calldata encryptedSnapshot,
+        uint256 ephPubkeyX,
+        uint256 ephPubkeyY,
+        bytes calldata encryptedNoteTo,
+        uint256 ephPubkeyToX,
+        uint256 ephPubkeyToY
     ) external {
-        require(to != address(0),  "JanusToken: transfer to zero address");
-        require(to != msg.sender,  "JanusToken: cannot transfer to self");
+        require(to != address(0), "JanusToken: transfer to zero address");
+        require(to != msg.sender, "JanusToken: cannot transfer to self");
+
+        _recordFirstSnapshot(msg.sender);
+        _recordFirstSnapshot(to);
 
         Point memory senderCommit = _effectiveCommitment(msg.sender);
         require(
@@ -304,10 +420,8 @@ abstract contract JanusToken is
             "JanusToken: invalid transfer proof"
         );
 
-        // Sender commitment becomes C_new
         commitments[msg.sender] = Point({ x: publicInputs[4], y: publicInputs[5] });
 
-        // Recipient commitment += C_tx (homomorphic)
         Point memory recvCommit = _effectiveCommitment(to);
         (uint256 rx, uint256 ry) = babyJub.babyAdd(
             recvCommit.x, recvCommit.y,
@@ -316,16 +430,15 @@ abstract contract JanusToken is
         commitments[to] = Point({ x: rx, y: ry });
 
         emit ConfidentialTransfer(msg.sender, to);
+        emit ShieldedTransferWithSnapshot(
+            msg.sender, to,
+            encryptedSnapshot, ephPubkeyX, ephPubkeyY,
+            encryptedNoteTo, ephPubkeyToX, ephPubkeyToY
+        );
     }
 
     // -----------------------------------------------------------------------
-    // Abstract template-method hooks for wrap/unwrap
-    //
-    // Concrete tokens override these to take/release custody of the
-    // underlying asset (native FLOW, ERC-20, etc.). The shielded credit /
-    // debit accounting is provided by `_acceptShieldedCredit` and
-    // `_processShieldedDebit` below — concrete impls call them once they
-    // have verified the relevant proofs.
+    // Abstract template-method hooks
     // -----------------------------------------------------------------------
 
     function _wrap(
@@ -344,7 +457,7 @@ abstract contract JanusToken is
     ) internal virtual;
 
     // -----------------------------------------------------------------------
-    // Internal helpers — proof verification + commitment book-keeping
+    // Internal helpers
     // -----------------------------------------------------------------------
 
     function _verifyAmountDisclose(
@@ -372,9 +485,6 @@ abstract contract JanusToken is
         );
     }
 
-    /// @dev Credit `account` with the commitment `txCommit` after an
-    /// `_wrap` flow has verified the amount-disclose proof. Updates the
-    /// per-account commitment AND the total-supply commitment homomorphically.
     function _acceptShieldedCredit(
         address account,
         uint256[2] calldata txCommit
@@ -393,23 +503,16 @@ abstract contract JanusToken is
         totalSupplyCommitment = Point({ x: sx, y: sy });
     }
 
-    /// @dev Debit `account` of the commitment encoded by the verified
-    /// transfer-proof bundle. Caller MUST have already verified the
-    /// AmountDisclose proof, the transfer proof, AND the consistency
-    /// invariants between them (`C_old == account's commitment`,
-    /// `C_tx == txCommit`).
     function _processShieldedDebit(
         address account,
         uint256[2] calldata txCommit,
         uint256[6] calldata transferPublicInputs
     ) internal {
-        // Account → C_new
         commitments[account] = Point({
             x: transferPublicInputs[4],
             y: transferPublicInputs[5]
         });
 
-        // totalSupplyCommitment -= txCommit  (== add the negation)
         (uint256 negX, uint256 negY) = babyJub.negate(txCommit[0], txCommit[1]);
         (uint256 sx, uint256 sy) = babyJub.babyAdd(
             totalSupplyCommitment.x, totalSupplyCommitment.y,

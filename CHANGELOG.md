@@ -4,6 +4,61 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [0.6.4] — 2026-06-02
+
+### Added
+
+**Multi-token sprint deliverables — canonical v0.6 contracts migrated from cadence-crypto-lab.**
+
+#### `@claucondor/janus-token`
+
+- `JanusToken.sol` — Abstract base v0.6. Track B++ architectural change: replaces per-token
+  `memoKeyPubX`/`memoKeyPubY` mappings (deprecated tombstones at slots 7-8) with a shared
+  `MemoKeyRegistry` contract read from slot 90. UUPS-compatible (single-gap layout, 79-slot gap).
+  Fee mechanism at slots 10 (feeBps 10 bps hard-coded, configurable by admin).
+- `JanusFlow.sol` — Native-FLOW concrete token v0.6.3. Reads memo keys from shared
+  `MemoKeyRegistry` at slot 90.
+- `MemoKeyRegistry.sol` — Immutable BabyJubJub pubkey registry. No proxy, no admin. Single
+  `publishMemoKey()` call covers all Janus EVM tokens. On-curve validation (ax²+y²=1+dx²y²).
+  Deployed testnet: `0x05D104962ff087441f26BA11A1E1C3b9E091D663`.
+
+#### `@claucondor/janus-erc20`
+
+- `JanusERC20.sol` — ERC20-wrapping confidential token v0.6. Extends `JanusToken` base with
+  `transferFrom`/`transfer` custody pattern. Supports WFLOW9 (native-FLOW) and any ERC20
+  underlying. Storage slots 91+ (below the 79-slot gap at 11-89 + memoRegistry at 90).
+- `mocks/WFLOW9.sol` — Canonical wrapped-FLOW (WETH9-compatible) for testnet JanusWFLOW.
+  No canonical WFLOW exists on Flow EVM testnet; this is the authoritative v0.6 sprint deployment.
+- `mocks/MockERC20.sol` — Minimal mintable ERC20 for JanusMockUSDC testing.
+
+#### `@claucondor/janus-ft`
+
+- `JanusFT.cdc` — Production v0.6 generic Cadence FT wrapper (replaces lab-spike v0.5 stub).
+  Real cross-VM BabyJub arithmetic via `BabyJub.sol`, real Groth16 ZK via
+  `ConfidentialTransferVerifier.sol` + `AmountDiscloseVerifier.sol`. Accepts any
+  `@{FungibleToken.Vault}` underlying at deploy time. `FeeConfig` resource (upgrade-safe).
+  Deployed testnet: `0x7599043aea001283`.
+- `mocks/MockFT.cdc` — Generic mintable FungibleToken for testnet underlying.
+- New transactions (user-facing templates):
+  - `transactions/wrap_ft.cdc`
+  - `transactions/unwrap_ft.cdc`
+  - `transactions/shielded_transfer_ft.cdc`
+  - `transactions/setup_janus_ft_registry.cdc`
+  - `transactions/publish_memokey_ft.cdc`
+
+### Testnet addresses (v0.6.4)
+
+| Contract | Address |
+|---|---|
+| JanusFlow proxy (ERC1967 UUPS) | `0x2458ae2d26797c2ffa3B4f6612Bdc4aDf22b7156` |
+| JanusWFLOW proxy | `0x00129E94d5340bd19d0b4ed9CDf718BB6e0A9400` |
+| JanusMockUSDC proxy | `0xd45FDa099Cf67eD842eA379865AB08E18D62BAf3` |
+| MemoKeyRegistry | `0x05D104962ff087441f26BA11A1E1C3b9E091D663` |
+| JanusFT (Cadence) | `0x7599043aea001283` |
+| All feeBps | 10 (0.1%) |
+
+---
+
 ## [0.2.0] — 2026-05-26
 
 ### Changed
