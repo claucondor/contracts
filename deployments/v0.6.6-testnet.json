@@ -1,0 +1,83 @@
+{
+  "version": "0.6.6",
+  "date": "2026-06-03",
+  "network": "flow-evm-testnet",
+  "chainId": 545,
+  "admin": {
+    "cadence_address": "0xc4e8f99915893a2f",
+    "coa_evm_address": "0x000000000000000000000002656f9205e386ed78",
+    "pkey_path": "/home/oydual3/.flow/v066-admin.pkey",
+    "note": "New account created 2026-06-03 for clean v0.6.6 deploy"
+  },
+  "contracts": {
+    "MockUSDC": "0x686E8d90A7B608540cAF46E527fD8a5631A1b658",
+    "JanusERC20_impl": "0x45B27E943bE8b250c60059B5c7312246d6A6e7d8",
+    "JanusERC20_proxy": "0x4689a36427115a6023BEb8c8b3c38E6fDF5Ae84F",
+    "JanusFlow_impl": "0x9eA90185188c5549B7cEB553324eCdb2b2F6D021",
+    "JanusFlow_proxy": "0x2f4b9b63C869076c9dBE89626e340Fc7741fcE59",
+    "BabyJub": "0x27139AFda7425f51F68D32e0A38b7D43BcB0f870",
+    "AmountDiscloseVerifier": "0xD0ED3936530258C278f5357C1dB709ad34768352",
+    "ConfidentialTransferVerifier": "0x84852aF72D2EF2A0A937e8Dae0BFA482E707E39B",
+    "MemoKeyRegistry": "0x05D104962ff087441f26BA11A1E1C3b9E091D663"
+  },
+  "contract_status": {
+    "MockUSDC": "NEW (fresh 6-decimal testnet underlying)",
+    "JanusERC20_impl": "NEW (v0.5.0, 9-arg shieldedTransfer, fresh storage)",
+    "JanusERC20_proxy": "NEW (UUPS, initialized with fresh admin COA as owner)",
+    "JanusFlow_impl": "NEW (v0.6.3, 9-arg shieldedTransfer, fresh storage)",
+    "JanusFlow_proxy": "NEW (UUPS, initialized with fresh admin COA as owner)",
+    "BabyJub": "REUSED (stateless — no corruption risk)",
+    "AmountDiscloseVerifier": "REUSED (stateless — no corruption risk)",
+    "ConfidentialTransferVerifier": "REUSED (stateless — no corruption risk)",
+    "MemoKeyRegistry": "REUSED (shared registry — unaffected by old proxy state)"
+  },
+  "tx_hashes": {
+    "mockusdc_deploy": "2f6dfe7cd22abc7ec7b864f6c0a14ce7a8de324b178340d0fc195f48f74dc029",
+    "januserc20_impl_deploy": "b91a9d168aedc810c592b3cfb38cfd9fd0058d30e6b6e6201790c912d2c752e5",
+    "januserc20_proxy_deploy": "083a4a55f2ce2ead26c2952a17bdac6fb6866f17f95b38b93c2b53d628ab1339",
+    "janusflow_impl_deploy": "7b6407cceddb118a8018776d3aab65e5ba19e2fcbdfd096e2c36f51c698c4368",
+    "janusflow_proxy_deploy": "5417d9454ede418c03df912e03d2d6a57ebb80c7e38e1c1a36fc945bf4827edd",
+    "janusflow_initfees": "c07a8bfb8fc39c01fc15514d5bdbf0a234785540d52fd3cee155a0f25ddee6fb",
+    "januserc20_initfees": "badc16a7d4e405e22f18a9feeaa1c9fcdc8b4a03c86a63afd12bdb3316a7e897"
+  },
+  "post_deploy_checks": {
+    "janusflow": {
+      "owner_is_admin_coa": true,
+      "babyjub_correct": true,
+      "transfer_verifier_correct": true,
+      "amount_disclose_correct": true,
+      "memo_registry_correct": true,
+      "total_locked_zero": true
+    },
+    "januserc20": {
+      "owner_is_admin_coa": true,
+      "babyjub_correct": true,
+      "transfer_verifier_correct": true,
+      "amount_disclose_correct": true,
+      "memo_registry_correct": true,
+      "total_locked_zero": true,
+      "underlying_correct": true
+    }
+  },
+  "fee_status": "INITIALIZED",
+  "cadence_contracts": {
+    "MockFT": {
+      "address": "0x7599043aea001283",
+      "note": "REUSED from testnet-claucondor account"
+    },
+    "JanusFT": {
+      "address": "0x7599043aea001283",
+      "note": "REUSED from testnet-claucondor account (contractName: JanusFT)"
+    }
+  },
+  "explorer": {
+    "JanusFlow_proxy": "https://evm-testnet.flowscan.io/address/0x2f4b9b63C869076c9dBE89626e340Fc7741fcE59",
+    "JanusERC20_proxy": "https://evm-testnet.flowscan.io/address/0x4689a36427115a6023BEb8c8b3c38E6fDF5Ae84F",
+    "MockUSDC": "https://evm-testnet.flowscan.io/address/0x686E8d90A7B608540cAF46E527fD8a5631A1b658"
+  },
+  "fee_config": {
+    "recipient": "0x000000000000000000000002656f9205e386ed78",
+    "feeBps": 10,
+    "description": "0.1% fee to admin COA"
+  }
+}
