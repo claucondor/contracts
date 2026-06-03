@@ -1,57 +1,81 @@
-// wrap_ft.cdc — Wrap a FungibleToken amount into a JanusFT commitment.
+// wrap_ft.cdc — Wrap FungibleToken tokens into a JanusFT commitment.
 //
-// LEAK BY DESIGN: amount is a cleartext UFix64 arg (boundary). The user
-// withdraws `amount` from their FlowToken vault and deposits it into the
-// JanusFT registry's custody vault, then a Pedersen commitment is added
-// to their on-chain commitment.
+// Generic wrapper: works with any underlying FT configured in JanusFT.custodyVaultType.
+// For testnet this wraps MockFT; at mainnet swap the underlying to the production FT.
+//
+// LEAK BY DESIGN: `grossAmount` is a cleartext UFix64 arg (boundary event).
+// The Groth16 amount-disclose proof binds `txCommit` to NET (gross - fee).
+//
+// Fee math (caller computes off-chain via JanusFT.computeFee(gross)):
+//   gross = grossAmount
+//   fee   = JanusFT.computeFee(gross)
+//   net   = grossAmount - fee
+// The proof binds to `net`, NOT `gross`. The contract validates this.
 //
 // Args:
-//   registryAddr:  Address of the account holding the JanusFT registry
-//   amount:        UFix64 cleartext amount (boundary — visible)
-//   txCommitX:     UInt256 — x-coordinate of Pedersen(amount, blinding)
-//   txCommitY:     UInt256 — y-coordinate
-//   amountProofBytes: [UInt8] — opaque proof bytes
+//   registryAddr          Address holding the JanusFT registry (== signer)
+//   grossAmount           UFix64 — what the user pulls from their vault (boundary)
+//   netAmount             UFix64 — what the commitment binds to (= gross - fee)
+//   txCommitX/Y           Pedersen(netAmount, blinding) coordinates
+//   amountProof           [UInt256; 8] Groth16 proof (snarkjs format)
+//   amountPublicInputs    [UInt256; 3] amount_disclose public signals
+//   encryptedSnapshot     [UInt8] AES-GCM ciphertext of (netAmount, blinding); empty OK
+//   ephPubX/Y             Sender's ephemeral BabyJub pubkey for snapshot ECDH
 
-import "JanusFT"
-import "FungibleToken"
-import "FlowToken"
+import JanusFT from 0x7599043aea001283
+import MockFT from 0x7599043aea001283
+import FungibleToken from 0x9a0766d93b6608b7
+import EVM from 0x8c5303eaa26202d6
 
-transaction(registryAddr: Address, amount: UFix64, txCommitX: UInt256, txCommitY: UInt256, amountProofBytes: [UInt8]) {
+transaction(
+    registryAddr:       Address,
+    grossAmount:        UFix64,
+    netAmount:          UFix64,
+    txCommitX:          UInt256,
+    txCommitY:          UInt256,
+    amountProof:        [UInt256],
+    amountPublicInputs: [UInt256],
+    encryptedSnapshot:  [UInt8],
+    ephPubX:            UInt256,
+    ephPubY:            UInt256
+) {
     let depositVault: @{FungibleToken.Vault}
-    let registryRef: &JanusFT.CommitmentRegistry
+    let registryRef:  &JanusFT.CommitmentRegistry
     let senderAddress: Address
+    let coa:          auth(EVM.Call) &EVM.CadenceOwnedAccount
 
     prepare(signer: auth(BorrowValue) &Account) {
         self.senderAddress = signer.address
 
-        // Withdraw cleartext amount from FlowToken vault (LEAK BY DESIGN — boundary)
-        let userVault = signer.storage.borrow<auth(FungibleToken.Withdraw) &FlowToken.Vault>(
-            from: /storage/flowTokenVault
-        ) ?? panic("Signer has no FlowToken vault")
-        self.depositVault <- userVault.withdraw(amount: amount)
+        // Withdraw GROSS amount from MockFT vault (fee comes off the top inside the contract)
+        let userVault = signer.storage.borrow<auth(FungibleToken.Withdraw) &MockFT.Vault>(
+            from: MockFT.VaultStoragePath
+        ) ?? panic("wrap_ft: signer has no MockFT vault at ".concat(MockFT.VaultStoragePath.toString()))
+        self.depositVault <- userVault.withdraw(amount: grossAmount)
 
-        // Borrow the JanusFT registry (must use authorized capability path)
-        // For the spike, we assume the registry is on a known account; we
-        // borrow via a public capability that allows the wrap entry.
-        // NOTE: in a real design the registry would be exposed via an
-        // entitled capability gated by user identity. For the spike we
-        // use a borrow-through that any account can call.
-        let acct = getAccount(registryAddr)
-        // We CANNOT borrow the resource through a public cap because public
-        // cap excludes mutation. The lab spike model assumes the registry
-        // is on the SIGNER's account (signer == registryAddr). We borrow directly.
+        // Borrow registry (spike: registry must be on signer's account)
         self.registryRef = signer.storage.borrow<&JanusFT.CommitmentRegistry>(
             from: JanusFT.CommitmentRegistryStoragePath
-        ) ?? panic("Signer must hold the JanusFT registry (spike: registry on signer's account)")
+        ) ?? panic("wrap_ft: signer must hold the JanusFT registry")
+
+        // COA for cross-VM BabyJub calls
+        self.coa = signer.storage.borrow<auth(EVM.Call) &EVM.CadenceOwnedAccount>(
+            from: /storage/evm
+        ) ?? panic("wrap_ft: no COA at /storage/evm — run setup_coa first")
     }
 
     execute {
         self.registryRef.wrap(
-            account: self.senderAddress,
-            amount: amount,
-            depositVault: <- self.depositVault,
-            txCommit: JanusFT.Commitment(x: txCommitX, y: txCommitY),
-            amountProofBytes: amountProofBytes,
+            account:            self.senderAddress,
+            netAmount:          netAmount,
+            depositVault:       <- self.depositVault,
+            txCommit:           JanusFT.Commitment(x: txCommitX, y: txCommitY),
+            amountProof:        amountProof,
+            amountPublicInputs: amountPublicInputs,
+            encryptedSnapshot:  encryptedSnapshot,
+            ephPubX:            ephPubX,
+            ephPubY:            ephPubY,
+            coa:                self.coa
         )
     }
 }
