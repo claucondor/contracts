@@ -1,7 +1,7 @@
 {
   "name": "@claucondor/janus-token",
-  "version": "0.1.0",
-  "description": "JanusToken — BabyJubJub Pedersen commitment-based confidential token on Flow with Groth16-gated wrap/transfer/unwrap and 0.1% boundary fees (v0.5.4).",
+  "version": "0.6.4",
+  "description": "JanusToken — BabyJubJub Pedersen commitment-based confidential token on Flow with Groth16-gated wrap/transfer/unwrap, 0.1% boundary fees, shared MemoKeyRegistry (v0.6.4).",
   "type": "module",
   "scripts": {
     "compile": "hardhat compile --config hardhat.config.cjs",
