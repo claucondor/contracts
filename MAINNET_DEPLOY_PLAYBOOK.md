@@ -1,5 +1,78 @@
 # Mainnet Deploy Playbook — Janus v0.6.6
 
+## Memokey Derivation Stability — CRITICAL
+
+The memokey derivation function (`@claucondor/sdk/src/crypto/memokey.ts` +
+`derive-keypair.ts`) is LOAD-BEARING for all encrypted snapshots. Changing any
+parameter silently breaks backward compatibility for ALL existing users —
+shielded balances become unrecoverable. This is an irreversible fund-loss event.
+
+### Locked constants (MUST NEVER CHANGE for mainnet deployments)
+
+| Parameter | Locked value |
+|-----------|-------------|
+| `MEMO_KEY_CONTEXT` | `"openjanus/memokey/v1"` |
+| HKDF salt | `UTF-8("openjanus/derive-babyjub/v1")` |
+| HKDF info | `UTF-8(MEMO_KEY_CONTEXT)` |
+| HKDF output length | `64 bytes` |
+| Hash algorithm | `SHA-256` |
+| BabyJub subgroup order | `2736030358979909402780800718157159386076813972158567259200215660948447373041` |
+| Field reduction | `bigEndianToBigInt(hkdfOutput) % BABYJUB_SUBGROUP_ORDER` |
+
+These were the values in SDK v0.6.7, introduced in commit `b41bbf1` (2026-05-30).
+The operator's testnet memokey was published at Unix `1780499750` (2026-06-03)
+using these exact parameters — confirmed by on-chain registry at
+`0x05D104962ff087441f26BA11A1E1C3b9E091D663`.
+
+### Pre-deploy gate (REQUIRED before any mainnet contract deploy)
+
+```bash
+cd /home/oydual3/openjanus-sdk
+npm test -- memokey-vectors
+```
+
+This MUST show `5 passed` (or more) under `memokey derivation — locked
+regression vectors`. If any vector fails, the derivation was modified.
+STOP immediately — do not deploy. Revert the derivation change and investigate.
+
+### Audit cadence
+
+Before every minor SDK version bump:
+```bash
+# Diff derivation files against the last published version
+git diff vX.Y.0 src/crypto/memokey.ts src/crypto/derive-keypair.ts
+```
+
+Any non-trivial diff to these two files → block the release pending a
+coordinated migration plan (V1 export + V2 addition + re-encryption tooling +
+user announcement). See the file header in `memokey.ts` for the full procedure.
+
+### What the `C_old mismatch` revert means
+
+If the on-chain verifier returns `C_old mismatch`, the snapshot was encrypted
+to a different memokey pubkey than the one the proof uses. Before assuming
+derivation drift, check:
+1. Was the snapshot encrypted using the same `MEMO_KEY_CONTEXT` and parameters?
+   Run `npm test -- memokey-vectors` on the SDK version that encrypted the snapshot.
+2. Does the on-chain registry pubkey match what the current SDK derives?
+   If not, the user needs to re-publish their memokey (not change derivation).
+3. Only if the registry pubkey ITSELF came from a different derivation →
+   coordinated migration required (V1→V2 re-encryption).
+
+### Audit findings — 2026-06-03
+
+- `memokey.ts` has exactly ONE commit in SDK history (`344bef0`, 2026-06-01).
+  No parameter changes were ever made. The derivation was stable from day one.
+- `derive-keypair.ts` was introduced in `b41bbf1` (2026-05-30) — the full HKDF
+  construction was present from the first commit with no subsequent changes.
+- The operator's on-chain memokey `publishedAt = 1780499750` (2026-06-03) is
+  AFTER the SDK introduction date. The derivation function in place when the
+  key was published is identical to the one in place today.
+- Conclusion: the `C_old mismatch` is NOT caused by derivation drift. The
+  snapshot was likely encrypted to a stale pubkey in the registry (e.g., a
+  re-publish happened after the snapshot was created, or the wrong pubkey was
+  used during wrap). The derivation itself is sound.
+
 ## Overview
 
 This playbook covers deploying the Janus confidential token stack to Flow EVM mainnet.
