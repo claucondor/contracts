@@ -389,3 +389,68 @@ Key event proof — step1_wrap `WrapWithSnapshot` emitted:
 Full results: `deployments/aggregate-testnet-smoke.json`
 
 Phase A is closed. Phase B (SDK port) may begin.
+
+---
+
+## JanusFT v0.7 — Cadence-side privacy wrapper for MockFT
+
+Date: 2026-06-05
+Branch: feat/aggregate-commitment (appended)
+
+### What changed
+
+JanusFT Cadence contract migrated from v0.6 windowed-Pedersen to v0.7 aggregate-Pedersen,
+matching JanusFlow and JanusERC20. Fresh deploy at `v066-admin` (0xc4e8f99915893a2f).
+
+Key changes:
+- `wrapWithProof()` replaces `wrap()` — AmountDiscloseAggregate proof required
+- `usedNonces` anti-replay dict inside `CommitmentRegistry` resource (upgrade-validator safe)
+- AmountDiscloseAggregate verifier: 4 public inputs [amount, commitX, commitY, nonce]
+- ConfidentialTransferAggregate verifier: 6 public inputs [C_old, C_tx, C_new]
+- `EVM.encodeABIWithSignature` for correct typed ABI encoding of proof arrays
+- Underlying: MockFT @ 0x7599043aea001283
+- Fee: 10 bps (0.1%) on wrap and unwrap
+
+### Contract address
+
+| Contract | Cadence Address | Network |
+|----------|----------------|---------|
+| JanusFT | `0xc4e8f99915893a2f` | Flow testnet |
+
+Deploy tx: `94ec21259b0e5f7ed4f86fcb742f511dda526e73b0cb4b4a5b26b904765dad7a`
+Setup tx: `d5a3c119d35a194659a573c6cf9ef11a73a6ad8abe10c42b46a6436b96ccbf93`
+
+### Mainnet blockers (shared with JanusFlow / JanusERC20)
+
+These are stack-wide, not JanusFT-specific:
+1. Multi-party Phase 2 ceremony for both circuits (single-contributor test zkeys only)
+2. OFAC Chainalysis Oracle hook in wrap before mainnet deployment
+3. Audit of ZK circuit + Cadence contract
+
+### Smoke test result: PASS
+
+| Check | Result |
+|-------|--------|
+| adminReset (pre-smoke) | PASS |
+| wrap 5.0 MockFT — WrapWithSnapshot event | PASS |
+| wrap — encryptedSnapshot non-empty (64 bytes) | PASS |
+| wrap — ephPubX non-zero | PASS |
+| wrap — totalLocked = 4.995 (gross 5.0 − 0.1% fee) | PASS |
+| wrap — alice commitment == wrapCommit | PASS |
+| shieldedTransfer 2.0 alice→bob — no cleartext amount | PASS |
+| shieldedTransfer — totalLocked unchanged | PASS |
+| shieldedTransfer — bob/alice commitments correct | PASS |
+| unwrap 3.0 MockFT — UnwrapWithSnapshot event | PASS |
+| unwrap — totalLocked = 1.995 (4.995 − 3.0) | PASS |
+| adminReset (post-smoke) | PASS |
+
+Smoke TX hashes:
+- adminReset (before): `31fffd462096821d73876f23d914db68ad9fca05741c3e9e830d9e6a8c8fae87`
+- wrap: `040f9b79017734773942fbf6a0056e3af190531ff61209e4b3c37d5fd1f5afa6`
+- shieldedTransfer: `8cbe2a9b060f71e251ebc5d68102ccbc6770aebba1ccbbfa055eba0cb2b14609`
+- unwrap: `f2052b0f82015f71ecb4ead772bcda921cfa3c6e5d9b71f4ea37e4b5d1987e52`
+- adminReset (after): `0b66652bccbffc61e89d7e2e5545177c4ec4cef56f77ec265e28cc70430a85f7`
+
+Full results: `packages/janus-ft/deployments/janusft-aggregate-smoke.json`
+
+JanusFT v0.7 is complete. All Cadence Janus tokens now use the aggregate-Pedersen v0.7 stack.
