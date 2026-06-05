@@ -3,15 +3,22 @@
 //
 // JanusToken.sol — Abstract base for all Janus confidential tokens.
 //
-// Track B++ architectural fix: replaces per-token memoKeyPubX/memoKeyPubY
-// mappings with a shared MemoKeyRegistry contract.  All Janus EVM tokens now
-// read from one source of truth.  SDK routes publishMemoKey() calls directly
-// to the registry; the Janus token no longer exposes publishMemoKey() itself.
+// v0.7.0 — 2-generator Pedersen aggregate commitment upgrade
+//
+// This version replaces the windowed-Pedersen accumulator path with the
+// classical 2-generator commitment scheme:
+//
+//   Commit(v, r) := [v]·G + [r]·H
+//
+// This is homomorphic: Commit(v1,r1) + Commit(v2,r2) = Commit(v1+v2, r1+r2)
+// so the on-chain accumulator correctly tracks accumulated deposits after N wraps.
+//
+// The `pedersen2Gen` contract handles all accumulator arithmetic via addCommits().
+// The `babyJub` contract is retained for the negate() call in _processShieldedDebit.
 //
 // STORAGE LAYOUT — CRITICAL — UUPS COMPATIBILITY
 // -----------------------------------------------
-// The live proxies (JanusFlow / JanusWFLOW / JanusMockUSDC) were deployed with
-// JanusToken_v0_6 layout (fresh-deploy single-gap):
+// This is a FRESH deploy layout (new proxies, not upgrades of v0.6.x proxies).
 //
 //   slot  0    babyJub                  address
 //   slot  1    transferVerifier         address
@@ -19,42 +26,13 @@
 //   slot  3    commitments              mapping(address => Point)
 //   slot  4-5  totalSupplyCommitment    Point
 //   slot  6    totalLocked              uint256
-//   slot  7    memoKeyPubX              mapping(address => uint256)   <= DEPRECATED
-//   slot  8    memoKeyPubY              mapping(address => uint256)   <= DEPRECATED
+//   slot  7    memoKeyPubX              mapping  (DEPRECATED — slot kept)
+//   slot  8    memoKeyPubY              mapping  (DEPRECATED — slot kept)
 //   slot  9    firstSnapshotBlock       mapping(address => uint256)
-//   slot 10    feeRecipient + feeBps    packed (address 20B + uint16 2B)
-//   slot 11..90  __gap[80]              uint256[80]
-//
-// SLOTS 7 AND 8 ARE PRESERVED (declared as DEPRECATED mappings).
-// DO NOT REMOVE or reorder them — UUPS storage layout must be byte-compatible.
-// New state (memoRegistry) is appended at the tail of __gap, shrinking __gap
-// from [80] to [79] (one slot consumed).  This is the safe, canonical OZ
-// pattern for adding state to upgraded implementations.
-//
-// After v0.6.3 upgrade the __gap occupies slots 11..89 (79 slots) and
-// memoRegistry occupies slot 90.
-//
-// VERIFYING SLOT 90:
-//   In JanusToken_v0_6: base __gap[80] spans slots 11..90
-//                        (11 + 80 - 1 = 90, zero-indexed = 11 to 90).
-//   In JanusToken_v0_6_3: __gap[79] spans slots 11..89; memoRegistry at 90.
-//   Both leave slots 0..90 occupied; concrete subclasses continue at slot 91+.
-//
-// Concrete subclasses MUST NOT add state between the base slots and their own
-// first variable — the gap absorbs additions.
-//
-// UPGRADE PATTERN (for 3 proxies):
-//   1. Deploy new JanusFlow_v0_6_3 / JanusERC20_v0_6_3 impl (no init needed).
-//   2. Call proxy.upgradeToAndCall(newImpl, "0x") from proxy owner COA.
-//   3. After upgrade, memoRegistry auto-reads from slot 90 — but slot 90 was
-//      part of the old __gap and is zero.  Therefore memoRegistry starts as
-//      address(0) until we call _setMemoRegistry().
-//   4. Call setMemoRegistry(MEMO_REGISTRY_ADDRESS) from owner (one-shot or
-//      mutable setter with owner guard).
-//
-// Note: _setMemoRegistry is a separate owner-only call post-upgrade, not part
-// of upgradeToAndCall, because UUPS upgradeToAndCall data would need to be
-// signed by the COA owner and the encoding is straightforward to do separately.
+//   slot 10    feeRecipient + feeBps    packed
+//   slot 11..89  __gap[79]             uint256[79]
+//   slot 90    memoRegistry             address
+//   slot 91    pedersen2Gen             address  <-- NEW in v0.7.0
 
 pragma solidity ^0.8.20;
 
@@ -100,8 +78,17 @@ interface IMemoKeyRegistry {
         returns (uint256 x, uint256 y, uint256 publishedAt);
 }
 
+interface IPedersen2Gen {
+    function addCommits(
+        uint256 x1, uint256 y1,
+        uint256 x2, uint256 y2
+    ) external view returns (uint256 rx, uint256 ry);
+
+    function isOnCurve(uint256 x, uint256 y) external pure returns (bool);
+}
+
 // ---------------------------------------------------------------------------
-// JanusToken_v0_6_3 — abstract base (B++ upgrade)
+// JanusToken — abstract base (v0.7.0, aggregate commitment upgrade)
 // ---------------------------------------------------------------------------
 
 abstract contract JanusToken is
@@ -119,7 +106,7 @@ abstract contract JanusToken is
     }
 
     // -----------------------------------------------------------------------
-    // Storage — must be byte-compatible with JanusToken_v0_6 layout.
+    // Storage — slot-stable layout
     //
     //   slot  0  babyJub
     //   slot  1  transferVerifier
@@ -128,15 +115,13 @@ abstract contract JanusToken is
     //   slot  4  totalSupplyCommitment.x
     //   slot  5  totalSupplyCommitment.y
     //   slot  6  totalLocked
-    //   slot  7  memoKeyPubX   DEPRECATED: read from memoRegistry instead
-    //   slot  8  memoKeyPubY   DEPRECATED: read from memoRegistry instead
+    //   slot  7  memoKeyPubX   DEPRECATED: read from memoRegistry
+    //   slot  8  memoKeyPubY   DEPRECATED: read from memoRegistry
     //   slot  9  firstSnapshotBlock
     //   slot 10  feeRecipient (20B) + feeBps (2B)  packed
     //   slot 11..89  __gap[79]
-    //   slot 90  memoRegistry   <-- NEW in v0.6.3 (tail of former __gap[80])
-    //
-    // Concrete subclasses (JanusERC20_v0_6_3, JanusFlow_v0_6_3) continue at
-    // slot 91+ (same as in v0.6 — no shift).
+    //   slot 90  memoRegistry
+    //   slot 91  pedersen2Gen   <-- NEW
     // -----------------------------------------------------------------------
 
     IBabyJub                       public babyJub;                  // slot 0
@@ -149,10 +134,7 @@ abstract contract JanusToken is
 
     uint256 public totalLocked;                                     // slot 6
 
-    // DEPRECATED: these mappings are NOT removed — slots 7 and 8 must stay
-    // in the same position for UUPS storage compatibility with the live proxies.
-    // Existing legacy data in these slots is orphaned (ignored by v0.6.3 logic).
-    // New memo key data is read exclusively from memoRegistry (slot 90).
+    // DEPRECATED: slots 7 and 8 kept for layout stability.
     mapping(address => uint256) public memoKeyPubX; // slot 7 — DEPRECATED
     mapping(address => uint256) public memoKeyPubY; // slot 8 — DEPRECATED
 
@@ -161,12 +143,14 @@ abstract contract JanusToken is
     address public feeRecipient;                                    // slot 10, offset 0
     uint16  public feeBps;                                          // slot 10, offset 20
 
-    /// Reserved storage — shrunk from [80] to [79] to accommodate memoRegistry.
+    /// Reserved storage gap
     uint256[79] private __gap;                                      // slot 11..89
 
     /// Shared MemoKeyRegistry — single source of truth for all Janus EVM tokens.
-    /// Occupies slot 90 (formerly the last slot of __gap[80]).
     IMemoKeyRegistry public memoRegistry;                           // slot 90
+
+    /// 2-generator Pedersen commitment library — homomorphic accumulator.
+    IPedersen2Gen    public pedersen2Gen;                           // slot 91
 
     // -----------------------------------------------------------------------
     // Fee constants
@@ -182,7 +166,6 @@ abstract contract JanusToken is
     event Unwrapped(address indexed user, address indexed recipient, uint256 amount);
     event ConfidentialTransfer(address indexed from, address indexed to);
 
-    /// Emitted when the shared registry address is configured.
     event MemoRegistrySet(address indexed registry);
 
     event WrapWithSnapshot(
@@ -224,7 +207,7 @@ abstract contract JanusToken is
     event FeeBpsChanged(uint16 oldBps, uint16 newBps);
 
     // -----------------------------------------------------------------------
-    // Initializer (for new proxies — not used in UUPS upgrade path)
+    // Initializer (for new proxies)
     // -----------------------------------------------------------------------
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -237,13 +220,15 @@ abstract contract JanusToken is
         address _transferVerifier,
         address _amountDiscloseVerifier,
         address _owner,
-        address _memoRegistry
+        address _memoRegistry,
+        address _pedersen2Gen
     ) internal onlyInitializing {
         require(_babyJub                != address(0), "JanusToken: zero babyJub");
         require(_transferVerifier       != address(0), "JanusToken: zero transferVerifier");
         require(_amountDiscloseVerifier != address(0), "JanusToken: zero amountDiscloseVerifier");
         require(_owner                  != address(0), "JanusToken: zero owner");
         require(_memoRegistry           != address(0), "JanusToken: zero memoRegistry");
+        require(_pedersen2Gen           != address(0), "JanusToken: zero pedersen2Gen");
 
         __Ownable_init(_owner);
         __UUPSUpgradeable_init();
@@ -252,6 +237,7 @@ abstract contract JanusToken is
         transferVerifier       = IConfidentialTransferVerifier(_transferVerifier);
         amountDiscloseVerifier = IAmountDiscloseVerifier(_amountDiscloseVerifier);
         memoRegistry           = IMemoKeyRegistry(_memoRegistry);
+        pedersen2Gen           = IPedersen2Gen(_pedersen2Gen);
 
         totalSupplyCommitment = Point({ x: 0, y: 1 });
     }
@@ -260,13 +246,8 @@ abstract contract JanusToken is
 
     // -----------------------------------------------------------------------
     // Registry admin
-    //
-    // setMemoRegistry is the post-upgrade setter called by the proxy owner
-    // after upgradeToAndCall completes (slot 90 is zero until this is called).
     // -----------------------------------------------------------------------
 
-    /// @notice Configure (or update) the shared MemoKeyRegistry address.
-    /// @dev Owner-only.  Called once after UUPS upgrade to wire in the registry.
     function setMemoRegistry(address _registry) external onlyOwner {
         require(_registry != address(0), "JanusToken: zero registry");
         memoRegistry = IMemoKeyRegistry(_registry);
@@ -274,11 +255,9 @@ abstract contract JanusToken is
     }
 
     // -----------------------------------------------------------------------
-    // MemoKey READ helper (replaces direct mapping reads)
+    // MemoKey READ helper
     // -----------------------------------------------------------------------
 
-    /// @notice Read the caller's registered BabyJub pubkey from the shared registry.
-    /// @dev Returns (0,0) if not registered.
     function getMemoKeyFromRegistry(address user)
         public
         view
@@ -380,6 +359,7 @@ abstract contract JanusToken is
         return (p.x, p.y);
     }
 
+    /// @dev Converts uninitialised storage (0, 0) to the BabyJubJub identity (0, 1).
     function _effectiveCommitment(address account) internal view returns (Point memory) {
         Point memory c = commitments[account];
         if (c.x == 0 && c.y == 0) {
@@ -389,7 +369,7 @@ abstract contract JanusToken is
     }
 
     // -----------------------------------------------------------------------
-    // shieldedTransfer — reads memo key from registry for recipient note
+    // shieldedTransfer — 9-arg signature compatible with SDK v0.6.3+
     // -----------------------------------------------------------------------
 
     function shieldedTransfer(
@@ -420,10 +400,12 @@ abstract contract JanusToken is
             "JanusToken: invalid transfer proof"
         );
 
+        // Sender: set new_commit from proof output
         commitments[msg.sender] = Point({ x: publicInputs[4], y: publicInputs[5] });
 
+        // Recipient: accumulate transfer_commit using homomorphic addition
         Point memory recvCommit = _effectiveCommitment(to);
-        (uint256 rx, uint256 ry) = babyJub.babyAdd(
+        (uint256 rx, uint256 ry) = pedersen2Gen.addCommits(
             recvCommit.x, recvCommit.y,
             publicInputs[2], publicInputs[3]
         );
@@ -485,18 +467,20 @@ abstract contract JanusToken is
         );
     }
 
+    /// @dev Accumulate txCommit into account's shielded balance.
+    /// Uses pedersen2Gen.addCommits for homomorphic accumulation.
     function _acceptShieldedCredit(
         address account,
         uint256[2] calldata txCommit
     ) internal {
         Point memory current = _effectiveCommitment(account);
-        (uint256 nx, uint256 ny) = babyJub.babyAdd(
+        (uint256 nx, uint256 ny) = pedersen2Gen.addCommits(
             current.x, current.y,
             txCommit[0], txCommit[1]
         );
         commitments[account] = Point({ x: nx, y: ny });
 
-        (uint256 sx, uint256 sy) = babyJub.babyAdd(
+        (uint256 sx, uint256 sy) = pedersen2Gen.addCommits(
             totalSupplyCommitment.x, totalSupplyCommitment.y,
             txCommit[0], txCommit[1]
         );
@@ -514,7 +498,7 @@ abstract contract JanusToken is
         });
 
         (uint256 negX, uint256 negY) = babyJub.negate(txCommit[0], txCommit[1]);
-        (uint256 sx, uint256 sy) = babyJub.babyAdd(
+        (uint256 sx, uint256 sy) = pedersen2Gen.addCommits(
             totalSupplyCommitment.x, totalSupplyCommitment.y,
             negX, negY
         );
