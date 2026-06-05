@@ -1,4 +1,13 @@
-# ConfidentialTransferAggregate Circuit
+# Aggregate-Pedersen Circuits
+
+This directory contains two Groth16 circuits for the v0.7.x Janus confidential token stack:
+
+1. **ConfidentialTransferAggregate** — shieldedTransfer proof
+2. **AmountDiscloseAggregate** — wrap-time binding proof (amount-disclose with anti-replay nonce)
+
+---
+
+## 1. ConfidentialTransferAggregate Circuit
 
 ## Overview
 
@@ -125,3 +134,92 @@ packages/janus-token/contracts/solidity/ConfidentialTransferAggregateVerifier.so
 ```
 
 WARN header: single-contributor test zkey — regenerate from production zkey before mainnet.
+
+---
+
+## 2. AmountDiscloseAggregate Circuit
+
+### Purpose
+
+Binds a submitted Pedersen commitment to the wrap-time amount and enforces anti-replay
+via a nonce. Without this proof, a caller could submit any commitment point regardless
+of the actual msg.value, corrupting their on-chain balance.
+
+### Circuit statistics
+
+| Field        | Value  |
+|--------------|--------|
+| Constraints  | 6,163  |
+| Private inputs | 1    |
+| Public inputs  | 4    |
+| Curve        | BN254  |
+| Protocol     | Groth16 |
+
+### Public input layout
+
+Order matters — matches the Solidity verifier ABI (`uint256[4] _pubSignals`):
+
+| Index | Name      | Description                                             |
+|-------|-----------|---------------------------------------------------------|
+| 0     | amount    | Wrap amount (== msg.value for JanusFlow)                |
+| 1     | commitX   | Commitment x-coordinate                                 |
+| 2     | commitY   | Commitment y-coordinate                                 |
+| 3     | nonce     | Anti-replay nonce; enforced by contract usedNonces map  |
+
+### Private input
+
+| Name     | Bits | Description                                   |
+|----------|------|-----------------------------------------------|
+| blinding | 252  | Blinding scalar: Commit(amount, blinding) = (commitX, commitY) |
+
+### Hardening features
+
+- **Amount binding**: prove `commit = [amount]G + [blinding]H`
+- **Range check amount**: `amount < 2^128` via Num2Bits(128)
+- **Range check blinding**: `blinding < 2^252` via Num2Bits(252)
+- **Nonce binding**: nonce is a public input, dummy quadratic constraint
+  forces it into R1CS witness; anti-replay guarantee from contract's `usedNonces` mapping
+
+### Generators
+
+Same G and H as ConfidentialTransferAggregate. See above.
+
+### Directory layout additions
+
+```
+circuits/aggregate-ceremony/
+  amount_disclose_aggregate.circom              — circuit source
+  build/
+    amount_disclose_aggregate.r1cs              — R1CS constraint system
+    amount_disclose_aggregate.sym               — symbol map
+    amount_disclose_aggregate_js/
+      amount_disclose_aggregate.wasm            — WebAssembly witness generator
+      generate_witness.js
+      witness_calculator.js
+  setup/
+    amount_disclose_aggregate_test.zkey         — TESTNET-ONLY test zkey
+    amount_disclose_verification_key.json
+```
+
+### Ceremony status
+
+Same as the transfer circuit: **TESTNET-ONLY — single-contributor test zkey**.
+
+**Required before mainnet:**
+- Multi-party Phase 2 ceremony with at least 3 independent contributors
+- `snarkjs zkey contribute` per contributor
+- `snarkjs zkey beacon` for final randomness
+- `snarkjs zkey verify` phase 2 verification
+- New Solidity verifier exported: `AmountDiscloseAggregateVerifier.sol`
+
+### Solidity verifier
+
+Generated from the test zkey:
+
+```
+packages/janus-token/contracts/solidity/AmountDiscloseAggregateVerifier.sol
+packages/janus-erc20/contracts/solidity/AmountDiscloseAggregateVerifier.sol
+```
+
+Contract name: `AmountDiscloseAggregateVerifier`
+Interface: `verifyProof(uint[2] pA, uint[2][2] pB, uint[2] pC, uint[4] pubSignals) → bool`
