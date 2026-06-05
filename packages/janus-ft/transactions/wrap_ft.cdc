@@ -5,27 +5,27 @@
 //
 // LEAK BY DESIGN: `grossAmount` is a cleartext UFix64 arg (boundary event).
 // The AmountDiscloseAggregate circuit (4 public signals) binds the commitment
-// to GROSS (= vault.balance at entry). Fee is deducted inside the contract
-// after proof verification; the recipient's shielded balance encodes NET.
+// to NET amount (post-fee). Fee is deducted inside the contract before proof
+// verification; the proof and commitment both encode NET, matching EVM siblings.
 //
 // Fee math (caller computes off-chain via JanusFT.computeFee(gross)):
 //   gross = grossAmount (== vault.balance when passed in)
 //   fee   = JanusFT.computeFee(gross)
 //   net   = grossAmount - fee
-// The circuit binds to `gross`, NOT `net`. Net is implicit (gross - fee).
+// The circuit binds to `net`, NOT `gross`. (FIX 2026-06-05 — aligns with JanusFlow/JanusERC20)
 //
 // AmountDiscloseAggregate public inputs (v0.7, 4 signals):
-//   [grossAmount_uint256, commitX, commitY, nonce]
+//   [netAmount_uint256, commitX, commitY, nonce]
 //
 // Args:
 //   registryAddr          Address holding the JanusFT registry (== signer)
 //   grossAmount           UFix64 — what the user pulls from their vault (boundary)
 //   nonce                 UInt256 — anti-replay nonce (must be unused)
-//   commitX/Y             2-gen Pedersen commitment coordinates for grossAmount
+//   commitX/Y             2-gen Pedersen commitment coordinates for netAmount
 //   pA                    [UInt256; 2] Groth16 proof pA
 //   pB                    [[UInt256; 2]; 2] Groth16 proof pB (NOT byte-swapped — contract handles it)
 //   pC                    [UInt256; 2] Groth16 proof pC
-//   encryptedSnapshot     [UInt8] AES-GCM ciphertext of (grossAmount, blinding); required non-empty
+//   encryptedSnapshot     [UInt8] AES-GCM ciphertext of (netAmount, blinding); required non-empty
 //   ephPubkeyX/Y          Sender's ephemeral BabyJub pubkey for snapshot ECDH
 
 import JanusFT from 0xc4e8f99915893a2f

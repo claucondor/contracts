@@ -506,12 +506,11 @@ access(all) contract JanusFT {
             ]
 
             // AmountDisclose public inputs (4 signals, v0.7 aggregate):
-            //   [grossAmount_as_uint256, commitX, commitY, nonce]
-            // NOTE: gross (pre-fee vault.balance) is the public signal bound by the circuit.
-            // The circuit proves commitment encodes the gross amount the caller deposited.
-            // Fee deduction is a contract-level operation that happens after proof verification.
-            let grossUInt = JanusFT._ufixToUInt256(gross)
-            let publicInputs: [UInt256] = [grossUInt, commitX, commitY, nonce]
+            //   [netAmount_as_uint256, commitX, commitY, nonce]
+            // FIX 2026-06-05: align with EVM siblings (JanusFlow/JanusERC20) — proof binds to NET, not GROSS.
+            // SDK orchestration computes net = gross - fee before building the proof; this contract must match.
+            let netUInt = JanusFT._ufixToUInt256(netAmount)
+            let publicInputs: [UInt256] = [netUInt, commitX, commitY, nonce]
 
             let amountVerified = JanusFT._verifyAmountProof(
                 proof: proof, publicInputs: publicInputs, coa: coa
