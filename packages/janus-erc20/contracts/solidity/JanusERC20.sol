@@ -1,46 +1,14 @@
 // SPDX-License-Identifier: MIT
 // EXPERIMENTAL — NOT AUDITED — DO NOT USE FOR PRODUCTION
 //
-// JanusERC20.sol — Confidential ERC20 wrapper (v0.5).
-// Inherits JanusToken v0.3 (abstract base).
+// JanusERC20.sol — Confidential ERC20 wrapper (v0.7.0).
+// Inherits JanusToken v0.7.0 (aggregate commitment upgrade).
 //
-// v0.5 adds the following over v0.4:
-//   - 9-arg shieldedTransfer (selector 0x6218f5d9) — required by openjanus-sdk v0.6.3+
-//   - 6-arg wrap with encryptedSnapshot (WrapWithSnapshot event)
-//   - 9-arg unwrap with encryptedSnapshot (UnwrapWithSnapshot event)
-//   - firstSnapshotBlock mapping (per-user first-appearance block)
-//   - feeRecipient / feeBps / fee infrastructure
-//   - memoRegistry reference (shared MemoKeyRegistry)
-//   - ShieldedTransferWithSnapshot / WrapWithSnapshot / UnwrapWithSnapshot events
-//   - adminResetSlot (testnet only — UUPS owner guard)
-//
-// STORAGE LAYOUT — CRITICAL FOR UUPS COMPATIBILITY
-// -------------------------------------------------
-// The live proxy was deployed with JanusToken v0.3:
-//
-//   slot  0   babyJub
-//   slot  1   transferVerifier
-//   slot  2   amountDiscloseVerifier
-//   slot  3   commitments      mapping(address => Point)
-//   slot  4   totalSupplyCommitment.x
-//   slot  5   totalSupplyCommitment.y
-//   slot  6   totalLocked
-//   slot  7..46  __gap[40]    (JanusToken v0.3 reserved — NOT reordered here)
-//
-// JanusERC20 (v0.4, deployed):
-//   slot 47   underlying       address
-//   slot 48..86  __gapJanusERC20[39]
-//
-// JanusERC20 (v0.5, this file — UUPS upgrade target):
-//   slot 47   underlying       address        UNCHANGED
-//   slot 48   firstSnapshotBlock  mapping     NEW (consumes gap[0])
-//   slot 49   feeRecipient     address        NEW (consumes gap[1])
-//   slot 50   feeBps           uint16         NEW (consumes gap[2] — own slot for clarity)
-//   slot 51   memoRegistry     address        NEW (consumes gap[3])
-//   slot 52..86  __gapERC20[35]               REDUCED from 39 to 35
-//
-// The old 3-arg shieldedTransfer (selector 0x5764e916) and old wrap(uint256,...) remain
-// accessible via inherited JanusToken v0.3 — no breaking change for legacy callers.
+// Changes from v0.5.0:
+//   - Uses 2-generator Pedersen commitment (pedersen2Gen.addCommits) for
+//     all accumulator updates — correct homomorphism after N deposits
+//   - Accepts pedersen2Gen address in initializer
+//   - VERSION bumped to 0.7.0
 
 pragma solidity ^0.8.20;
 
@@ -63,29 +31,29 @@ interface IMemoKeyRegistryV2 {
 
 contract JanusERC20 is JanusToken {
 
-    string  public constant VERSION  = "0.5.0";
+    string  public constant VERSION  = "0.7.0";
     uint256 public constant MAX_WRAP = 18_000_000_000_000_000_000;
 
     // -----------------------------------------------------------------------
-    // Storage — slots 47+ (JanusToken v0.3 uses slots 0-46)
+    // Storage — slots after JanusToken base
     // -----------------------------------------------------------------------
 
-    /// slot 47 — underlying ERC20 (EXISTING from v0.4 — must not move)
+    /// underlying ERC20 token
     address public underlying;
 
-    /// slot 48 — first block a user appeared in a snapshot event (NEW in v0.5)
+    /// first block a user appeared in a snapshot event
     mapping(address => uint256) public firstSnapshotBlock;
 
-    /// slot 49 — fee destination address (NEW in v0.5)
+    /// fee destination address
     address public feeRecipient;
 
-    /// slot 50 — fee basis points (100 = 1 %, max 100) (NEW in v0.5)
+    /// fee basis points (100 = 1%, max 100)
     uint16  public feeBps;
 
-    /// slot 51 — shared MemoKeyRegistry (NEW in v0.5)
+    /// shared MemoKeyRegistry
     IMemoKeyRegistryV2 public memoRegistry;
 
-    /// slots 52..86 — reserved for future state (35 remaining after 4 consumed)
+    /// reserved
     uint256[35] private __gapERC20;
 
     // -----------------------------------------------------------------------
@@ -137,7 +105,7 @@ contract JanusERC20 is JanusToken {
     );
 
     // -----------------------------------------------------------------------
-    // Initializer — for NEW proxies (not called on UUPS upgrade path)
+    // Initializer — for NEW proxies
     // -----------------------------------------------------------------------
 
     function initialize(
@@ -146,17 +114,18 @@ contract JanusERC20 is JanusToken {
         address _amountDiscloseVerifier,
         address _underlying,
         address _owner,
-        address _memoRegistry
+        address _memoRegistry,
+        address _pedersen2Gen
     ) external initializer {
         require(_underlying   != address(0), "JanusERC20: zero underlying");
         require(_memoRegistry != address(0), "JanusERC20: zero memoRegistry");
-        __JanusToken_init(_babyJub, _transferVerifier, _amountDiscloseVerifier, _owner);
+        __JanusToken_init(_babyJub, _transferVerifier, _amountDiscloseVerifier, _owner, _pedersen2Gen);
         underlying   = _underlying;
         memoRegistry = IMemoKeyRegistryV2(_memoRegistry);
     }
 
     // -----------------------------------------------------------------------
-    // Admin — post-upgrade setters (owner-only)
+    // Admin — post-deploy setters (owner-only)
     // -----------------------------------------------------------------------
 
     function setMemoRegistry(address _registry) external onlyOwner {
@@ -216,9 +185,7 @@ contract JanusERC20 is JanusToken {
     }
 
     // -----------------------------------------------------------------------
-    // Public wrap — v0.6.3 signature with encryptedSnapshot (NEW SELECTOR)
-    //
-    // SDK calls: wrap(uint256,uint256[2],uint256[8],bytes,uint256,uint256)
+    // Public wrap
     // -----------------------------------------------------------------------
 
     function wrap(
@@ -249,9 +216,7 @@ contract JanusERC20 is JanusToken {
     }
 
     // -----------------------------------------------------------------------
-    // Public unwrap — v0.6.3 signature with encryptedSnapshot (NEW SELECTOR)
-    //
-    // SDK calls: unwrap(uint256,address,uint256[2],uint256[8],uint256[6],uint256[8],bytes,uint256,uint256)
+    // Public unwrap
     // -----------------------------------------------------------------------
 
     function unwrap(
@@ -271,9 +236,7 @@ contract JanusERC20 is JanusToken {
     }
 
     // -----------------------------------------------------------------------
-    // 9-arg shieldedTransfer — v0.6.3 signature (NEW SELECTOR 0x6218f5d9)
-    //
-    // SDK calls: shieldedTransfer(address,uint256[6],uint256[8],bytes,uint256,uint256,bytes,uint256,uint256)
+    // 9-arg shieldedTransfer (SDK v0.6.3+ compatible selector 0x6218f5d9)
     // -----------------------------------------------------------------------
 
     function shieldedTransfer(
@@ -304,10 +267,12 @@ contract JanusERC20 is JanusToken {
             "JanusERC20: invalid transfer proof"
         );
 
+        // Sender: set new_commit
         commitments[msg.sender] = Point({ x: publicInputs[4], y: publicInputs[5] });
 
+        // Recipient: accumulate transfer_commit homomorphically
         Point memory recvCommit = _effectiveCommitment(to);
-        (uint256 rx, uint256 ry) = babyJub.babyAdd(
+        (uint256 rx, uint256 ry) = pedersen2Gen.addCommits(
             recvCommit.x, recvCommit.y,
             publicInputs[2], publicInputs[3]
         );

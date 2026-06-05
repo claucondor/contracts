@@ -2,8 +2,8 @@
 // EXPERIMENTAL — NOT AUDITED — DO NOT USE FOR PRODUCTION
 //
 // JanusFlow.sol — Native-FLOW confidential token.
-// Inherits JanusToken (abstract base).  MemoKey stored in shared MemoKeyRegistry.
-// MemoKey reads delegated to the shared MemoKeyRegistry (slot 90).
+// Inherits JanusToken (abstract base, v0.7.0).
+// Uses 2-generator Pedersen aggregate commitment for homomorphic accumulation.
 
 pragma solidity ^0.8.20;
 
@@ -12,10 +12,10 @@ import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.s
 
 contract JanusFlow is JanusToken {
     uint256 public constant MAX_WRAP = type(uint128).max;
-    string  public constant VERSION  = "0.6.3";
+    string  public constant VERSION  = "0.7.0";
 
     // -----------------------------------------------------------------------
-    // Initializer — for new proxies (not called on UUPS upgrade path)
+    // Initializer — for new proxies
     // -----------------------------------------------------------------------
 
     function initialize(
@@ -23,10 +23,16 @@ contract JanusFlow is JanusToken {
         address _transferVerifier,
         address _amountDiscloseVerifier,
         address _owner,
-        address _memoRegistry
+        address _memoRegistry,
+        address _pedersen2Gen
     ) external initializer {
         __JanusToken_init(
-            _babyJub, _transferVerifier, _amountDiscloseVerifier, _owner, _memoRegistry
+            _babyJub,
+            _transferVerifier,
+            _amountDiscloseVerifier,
+            _owner,
+            _memoRegistry,
+            _pedersen2Gen
         );
     }
 
