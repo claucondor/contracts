@@ -1,0 +1,67 @@
+{
+  "date": "2026-06-05T11:31:08.871Z",
+  "version": "0.7.0",
+  "network": "flow-testnet",
+  "janusft_address": "0xc4e8f99915893a2f",
+  "mockft_address": "0x7599043aea001283",
+  "alice": "0xc4e8f99915893a2f",
+  "bob": "0xd807a3992d7be612",
+  "tx_hashes": {
+    "adminReset_before": "31fffd462096821d73876f23d914db68ad9fca05741c3e9e830d9e6a8c8fae87",
+    "wrap": "040f9b79017734773942fbf6a0056e3af190531ff61209e4b3c37d5fd1f5afa6",
+    "shieldedTransfer": "8cbe2a9b060f71e251ebc5d68102ccbc6770aebba1ccbbfa055eba0cb2b14609",
+    "unwrap": "f2052b0f82015f71ecb4ead772bcda921cfa3c6e5d9b71f4ea37e4b5d1987e52",
+    "adminReset_after": "0b66652bccbffc61e89d7e2e5545177c4ec4cef56f77ec265e28cc70430a85f7"
+  },
+  "steps": {
+    "step0_reset": {
+      "totalLocked": "0.00000000",
+      "pass": true
+    },
+    "step1_wrap": {
+      "amount": "5.00000000",
+      "nonce": "209254788096139605973195456226778172043",
+      "commit_x": "2931169679185947576079037045754332754941937915123523168855378927047051605360",
+      "commit_y": "1303214646817235808408229351383069282617616414916832462184727201544618437251",
+      "totalLocked_after": "4.99500000",
+      "encryptedSnapshot_len": 64,
+      "snapshot_non_empty": true,
+      "ephPubX_non_zero": true,
+      "commitment_match": true,
+      "pass": true
+    },
+    "step2_shielded_transfer": {
+      "from": "0xc4e8f99915893a2f",
+      "to": "0xd807a3992d7be612",
+      "no_cleartext_amount_in_event": true,
+      "totalLocked_unchanged": true,
+      "bob_commit_match": true,
+      "alice_commit_match": true,
+      "pass": true
+    },
+    "step3_unwrap": {
+      "amount": "3.00000000",
+      "recipient": "0xc4e8f99915893a2f",
+      "totalLocked_after": "1.99500000",
+      "expected_totalLocked": "1.99500000",
+      "unwrap_event_emitted": true,
+      "pass": true
+    },
+    "step4_adminReset_final": {
+      "totalLocked": "0.00000000",
+      "pass": true
+    }
+  },
+  "smoke_pass": true,
+  "summary": {
+    "step0_adminReset_before": true,
+    "step1_wrap_snapshot_non_empty": true,
+    "step1_wrap_ephPubKey_non_zero": true,
+    "step1_wrap_commitment_match": true,
+    "step2_shielded_transfer_no_cleartext": true,
+    "step2_totalLocked_unchanged": true,
+    "step3_unwrap_event_emitted": true,
+    "step3_totalLocked_correct": true,
+    "step4_adminReset_after": true
+  }
+}
