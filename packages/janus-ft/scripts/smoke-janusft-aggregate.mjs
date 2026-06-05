@@ -392,17 +392,23 @@ transaction {
 
     const WRAP_UFLOAT  = "5.00000000";
     const WRAP_RAW     = ufixToAtto(WRAP_UFLOAT);   // 500_000_000n (8-decimal UFix64 units)
+    // FIX 2026-06-05: proof must bind to NET amount (after fee), matching contract + SDK convention.
+    // Contract fee = 10 bps → WRAP_NET = WRAP_RAW * (10000 - 10) / 10000 = 499_500_000n (4.995 UFix64)
+    const WRAP_FEE_BPS  = 10n;
+    const WRAP_NET      = WRAP_RAW * (10000n - WRAP_FEE_BPS) / 10000n;  // 499_500_000n
     const wrapBlinding = rand128();
     const wrapNonce    = rand128();
-    const wrapCommit   = commit2gen(WRAP_RAW % SUBORDER, wrapBlinding);
+    // Commit binds to NET (not gross) — aligns with EVM siblings and SDK orchestration.
+    const wrapCommit   = commit2gen(WRAP_NET % SUBORDER, wrapBlinding);
 
-    console.log(`   amount:  ${WRAP_UFLOAT} MockFT`);
+    console.log(`   amount:  ${WRAP_UFLOAT} MockFT (gross)`);
+    console.log(`   net:     4.99500000 MockFT (after 10 bps fee)`);
     console.log(`   nonce:   ${wrapNonce}`);
     console.log(`   commit:  (${wrapCommit.x.toString().slice(0,20)}..., ${wrapCommit.y.toString().slice(0,20)}...)`);
 
-    console.log("   generating AmountDiscloseAggregate proof...");
+    console.log("   generating AmountDiscloseAggregate proof (NET amount)...");
     const { proof: amtProof } = await generateAmountDiscloseProof(
-        WRAP_RAW % SUBORDER,
+        WRAP_NET % SUBORDER,
         wrapCommit.x,
         wrapCommit.y,
         wrapBlinding,
@@ -491,7 +497,8 @@ transaction {
     console.log("\n[2] ShieldedTransfer 2.0 MockFT (alice → bob)");
 
     const XFER_RAW     = ufixToAtto("2.00000000");
-    const NEW_ALICE_RAW = WRAP_RAW - XFER_RAW;  // 3.0 MockFT
+    // Alice's on-chain balance after wrap is WRAP_NET (4.995 UFix64), not WRAP_RAW (5.0 UFix64).
+    const NEW_ALICE_RAW = WRAP_NET - XFER_RAW;  // 4.995 - 2.0 = 2.995 in atto units
 
     const xferBlinding  = rand128();
     const newAliceBlinding = rand128();
@@ -500,13 +507,13 @@ transaction {
     const newAliceCommit = commit2gen(NEW_ALICE_RAW % SUBORDER, newAliceBlinding);
 
     console.log("   generating ConfidentialTransferAggregate proof...");
-    // Private inputs for transfer: alice's old state (WRAP_RAW, wrapBlinding), xfer amount
+    // Private inputs for transfer: alice's old state (WRAP_NET, wrapBlinding), xfer amount
     const { proof: xferProof } = await generateTransferProof(
         aliceCommitX, aliceCommitY,
         xferCommit.x, xferCommit.y,
         newAliceCommit.x, newAliceCommit.y,
         xferBlinding, newAliceBlinding,
-        WRAP_RAW % SUBORDER, wrapBlinding, XFER_RAW % SUBORDER
+        WRAP_NET % SUBORDER, wrapBlinding, XFER_RAW % SUBORDER
     );
     console.log("   proof generated (off-chain verify PASS)");
 
@@ -587,13 +594,22 @@ transaction {
         pass: true,
     };
 
-    // ── 3. Unwrap 3.0 MockFT ──────────────────────────────────────────────────
+    // ── 3. Unwrap alice's entire remaining balance (NEW_ALICE_RAW = 2.995 UFix64) ─
+    //
+    // After the shielded transfer, alice holds NEW_ALICE_RAW in committed balance.
+    // WRAP_NET=4.995, XFER_RAW=2.0 → NEW_ALICE_RAW=2.995 (atto: 299_500_000n).
+    // We unwrap the full residual so the test is self-consistent.
 
-    console.log("\n[3] Unwrap 3.0 MockFT");
+    const UNWRAP_RAW    = NEW_ALICE_RAW;  // 299_500_000n (2.995 UFix64 units)
+    // UFix64 string from bigint atto units: split at 8-decimal boundary.
+    const UNWRAP_UFLOAT = (() => {
+        const int  = UNWRAP_RAW / 100_000_000n;
+        const frac = (UNWRAP_RAW % 100_000_000n).toString().padStart(8, "0");
+        return `${int}.${frac}`;
+    })();
+    const RESIDUAL_RAW  = 0n;  // alice empties her balance
 
-    const UNWRAP_UFLOAT = "3.00000000";
-    const UNWRAP_RAW    = ufixToAtto(UNWRAP_UFLOAT);
-    const RESIDUAL_RAW  = NEW_ALICE_RAW - UNWRAP_RAW;   // 0
+    console.log(`\n[3] Unwrap alice's full residual: ${UNWRAP_RAW} atto (${UNWRAP_UFLOAT} UFix64)`);
 
     const unwrapTxBlinding  = rand128();
     const residualBlinding  = rand128();
@@ -615,7 +631,7 @@ transaction {
         unwrapNonce
     );
     console.log("   generating ConfidentialTransferAggregate proof (C_old → C_new)...");
-    // Private inputs for unwrap: alice's state after xfer (NEW_ALICE_RAW=3.0, newAliceBlinding), unwrap amount
+    // Private inputs for unwrap: alice's state after xfer (NEW_ALICE_RAW, newAliceBlinding)
     const { proof: unwrapXferProof } = await generateTransferProof(
         aliceOldX, aliceOldY,
         unwrapTxCommit.x, unwrapTxCommit.y,
@@ -671,8 +687,9 @@ transaction {
     if (unwrapEvents.length === 0) throw new Error("No UnwrapWithSnapshot event emitted");
     console.log(`   UnwrapWithSnapshot event emitted (PASS)`);
 
-    // After unwrap 3.0: totalLocked = 4.995 - 3.0 = 1.995
-    const EXPECTED_AFTER_UNWRAP = "1.99500000";
+    // After unwrap (alice empties her balance): totalLocked = WRAP_NET - XFER_RAW = 4.995 - 2.0 = 2.995
+    // Bob's committed share (XFER_RAW=2.0) remains in the pool.
+    const EXPECTED_AFTER_UNWRAP = "2.00000000";
     const totalLockedAfterUnwrap = runScript(totalLockedScript, [], "tl_unwrap");
     if (totalLockedAfterUnwrap.value !== EXPECTED_AFTER_UNWRAP) {
         throw new Error(`totalLocked mismatch after unwrap: expected ${EXPECTED_AFTER_UNWRAP}, got ${totalLockedAfterUnwrap.value}`);

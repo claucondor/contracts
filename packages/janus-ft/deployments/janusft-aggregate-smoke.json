@@ -1,5 +1,5 @@
 {
-  "date": "2026-06-05T11:31:08.871Z",
+  "date": "2026-06-05T14:03:03.271Z",
   "version": "0.7.0",
   "network": "flow-testnet",
   "janusft_address": "0xc4e8f99915893a2f",
@@ -7,11 +7,11 @@
   "alice": "0xc4e8f99915893a2f",
   "bob": "0xd807a3992d7be612",
   "tx_hashes": {
-    "adminReset_before": "31fffd462096821d73876f23d914db68ad9fca05741c3e9e830d9e6a8c8fae87",
-    "wrap": "040f9b79017734773942fbf6a0056e3af190531ff61209e4b3c37d5fd1f5afa6",
-    "shieldedTransfer": "8cbe2a9b060f71e251ebc5d68102ccbc6770aebba1ccbbfa055eba0cb2b14609",
-    "unwrap": "f2052b0f82015f71ecb4ead772bcda921cfa3c6e5d9b71f4ea37e4b5d1987e52",
-    "adminReset_after": "0b66652bccbffc61e89d7e2e5545177c4ec4cef56f77ec265e28cc70430a85f7"
+    "adminReset_before": "4693b39309e396e8944f08f4cd0bc035167cef931896eed166cfef5e43f3a212",
+    "wrap": "f7c0f8a814a865fba3dc4ff414c5adc094b7533f2b8e510835c642ab52c83612",
+    "shieldedTransfer": "56b958f33e44adfe6df251d3f77a92acccaa14436f146e87bc3e1c9986c3efff",
+    "unwrap": "9ca8648daddbb77c5e3ad31ff530f6ef565502c54daa1e6ebe7f136b6d7d44af",
+    "adminReset_after": "adc09357b63d366aef4e5e090569b01244739fe7a0a52cfc498daa85e048ac8b"
   },
   "steps": {
     "step0_reset": {
@@ -20,9 +20,9 @@
     },
     "step1_wrap": {
       "amount": "5.00000000",
-      "nonce": "209254788096139605973195456226778172043",
-      "commit_x": "2931169679185947576079037045754332754941937915123523168855378927047051605360",
-      "commit_y": "1303214646817235808408229351383069282617616414916832462184727201544618437251",
+      "nonce": "298267754724139207911726646731957621648",
+      "commit_x": "10708499677764487618948406765866484740020452077996579075171442711074160902991",
+      "commit_y": "17208418951481067604140533156071291687684598342991906039372465400922853707935",
       "totalLocked_after": "4.99500000",
       "encryptedSnapshot_len": 64,
       "snapshot_non_empty": true,
@@ -40,10 +40,10 @@
       "pass": true
     },
     "step3_unwrap": {
-      "amount": "3.00000000",
+      "amount": "2.99500000",
       "recipient": "0xc4e8f99915893a2f",
-      "totalLocked_after": "1.99500000",
-      "expected_totalLocked": "1.99500000",
+      "totalLocked_after": "2.00000000",
+      "expected_totalLocked": "2.00000000",
       "unwrap_event_emitted": true,
       "pass": true
     },
