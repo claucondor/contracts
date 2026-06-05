@@ -15,8 +15,8 @@
     "MemoKeyRegistry": "0x05D104962ff087441f26BA11A1E1C3b9E091D663",
     "MockUSDC": "0x686E8d90A7B608540cAF46E527fD8a5631A1b658",
     "AmountDiscloseAggregateVerifier": "0xa80283baB7fcEFC2c75De43DB5a1cBF00E96B984",
-    "JanusFlow_impl_v071": "0x4D8f10B2f7CFdc0ef662f664fFd2fe8d671596db",
-    "JanusERC20_impl_v071": "0x73e2C552aADaaB673CB7620b6B2317487cf54B99"
+    "JanusFlow_impl_aggregate": "0x4D8f10B2f7CFdc0ef662f664fFd2fe8d671596db",
+    "JanusERC20_impl_aggregate": "0x73e2C552aADaaB673CB7620b6B2317487cf54B99"
   },
   "admin_coa": "0x000000000000000000000002656f9205e386ed78",
   "steps": {

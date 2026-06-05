@@ -1,11 +1,11 @@
 /**
  * deploy-aggregate-v2.mjs — amount-disclose aggregate integration deployment.
  *
- * This script completes the v0.7.x stack by:
+ * This script completes the aggregate-Pedersen stack by:
  *   1. Deploying AmountDiscloseAggregateVerifier (new — test zkey, 6,163 constraints)
- *   2. Deploying new JanusFlow impl (v0.7.1 — wrapWithProof + usedNonces)
+ *   2. Deploying new JanusFlow impl (wrapWithProof + usedNonces)
  *   3. Upgrading JanusFlow proxy to new impl (UUPS upgradeToAndCall)
- *   4. Deploying new JanusERC20 impl (v0.7.1 — wrapWithProof + usedNonces)
+ *   4. Deploying new JanusERC20 impl (wrapWithProof + usedNonces)
  *   5. Upgrading JanusERC20 proxy to new impl (UUPS upgradeToAndCall)
  *   6. Configuring AmountDiscloseAggregateVerifier on both proxies via setAmountDiscloseVerifier
  *
@@ -291,16 +291,16 @@ async function main() {
     }
     contracts.AmountDiscloseAggregateVerifier = amtVerifierAddress;
 
-    // ── 2. Deploy new JanusFlow impl (v0.7.1) ────────────────────────────────
-    console.log("\n[2/5] Deploying new JanusFlow impl (v0.7.1 — wrapWithProof)...");
+    // ── 2. Deploy new JanusFlow impl (aggregate-paired) ──────────────────────
+    console.log("\n[2/5] Deploying new JanusFlow impl (wrapWithProof — aggregate-paired)...");
     const jfImplBytecode = jfArt.bytecode.replace(/^0x/, "");
-    const jfImplResult = runFlowDeploy(jfImplBytecode, "janusflow_impl_v071");
-    txHashes.janusflow_impl_v071_deploy = jfImplResult.id ?? "unknown";
-    const jfImplAddress = extractDeployedAddress(jfImplResult, "janusflow_impl_v071");
-    console.log("  Flow tx:", txHashes.janusflow_impl_v071_deploy);
+    const jfImplResult = runFlowDeploy(jfImplBytecode, "janusflow_impl_aggregate");
+    txHashes.janusflow_impl_aggregate_deploy = jfImplResult.id ?? "unknown";
+    const jfImplAddress = extractDeployedAddress(jfImplResult, "janusflow_impl_aggregate");
+    console.log("  Flow tx:", txHashes.janusflow_impl_aggregate_deploy);
     console.log("  address:", jfImplAddress);
     if (!jfImplAddress) throw new Error("Failed to parse new JanusFlow impl address");
-    contracts.JanusFlow_impl_v071 = jfImplAddress;
+    contracts.JanusFlow_impl_aggregate = jfImplAddress;
 
     // ── 3. Upgrade JanusFlow proxy to new impl (UUPS upgradeToAndCall) ────────
     // Since we don't need to reinitialize (storage is preserved), use upgradeToAndCall with empty data.
@@ -314,16 +314,16 @@ async function main() {
     console.log("  Flow tx:", txHashes.janusflow_upgrade);
     console.log("  EVM tx: ", extractEvmTxHash(upgradeJfResult));
 
-    // ── 4. Deploy new JanusERC20 impl (v0.7.1) ───────────────────────────────
-    console.log("\n[4/5] Deploying new JanusERC20 impl (v0.7.1 — wrapWithProof)...");
+    // ── 4. Deploy new JanusERC20 impl (aggregate-paired) ─────────────────────
+    console.log("\n[4/5] Deploying new JanusERC20 impl (wrapWithProof — aggregate-paired)...");
     const erc20ImplBytecode = erc20Art.bytecode.replace(/^0x/, "");
-    const erc20ImplResult = runFlowDeploy(erc20ImplBytecode, "januserc20_impl_v071");
-    txHashes.januserc20_impl_v071_deploy = erc20ImplResult.id ?? "unknown";
-    const erc20ImplAddress = extractDeployedAddress(erc20ImplResult, "januserc20_impl_v071");
-    console.log("  Flow tx:", txHashes.januserc20_impl_v071_deploy);
+    const erc20ImplResult = runFlowDeploy(erc20ImplBytecode, "januserc20_impl_aggregate");
+    txHashes.januserc20_impl_aggregate_deploy = erc20ImplResult.id ?? "unknown";
+    const erc20ImplAddress = extractDeployedAddress(erc20ImplResult, "januserc20_impl_aggregate");
+    console.log("  Flow tx:", txHashes.januserc20_impl_aggregate_deploy);
     console.log("  address:", erc20ImplAddress);
     if (!erc20ImplAddress) throw new Error("Failed to parse new JanusERC20 impl address");
-    contracts.JanusERC20_impl_v071 = erc20ImplAddress;
+    contracts.JanusERC20_impl_aggregate = erc20ImplAddress;
 
     // ── 5. Upgrade JanusERC20 proxy to new impl ───────────────────────────────
     console.log("\n[5/5] Upgrading JanusERC20 proxy to new impl...");
@@ -388,23 +388,23 @@ async function main() {
     prevRecord.date    = new Date().toISOString().slice(0, 10);
 
     prevRecord.contracts.AmountDiscloseAggregateVerifier = amtVerifierAddress;
-    prevRecord.contracts.JanusFlow_impl_v071 = jfImplAddress;
-    prevRecord.contracts.JanusERC20_impl_v071 = erc20ImplAddress;
+    prevRecord.contracts.JanusFlow_impl_aggregate = jfImplAddress;
+    prevRecord.contracts.JanusERC20_impl_aggregate = erc20ImplAddress;
 
-    // Remove the old incompatible AmountDiscloseVerifier from active use
+    // Mark the old incompatible AmountDiscloseVerifier as retired
     prevRecord.contract_status.AmountDiscloseVerifier =
-        "RETIRED — replaced by AmountDiscloseAggregateVerifier in v0.7.1";
+        "RETIRED — replaced by AmountDiscloseAggregateVerifier";
     prevRecord.contract_status.AmountDiscloseAggregateVerifier =
         "NEW (test zkey — single-contributor, testnet only; 6,163 constraints)";
-    prevRecord.contract_status.JanusFlow_impl_v071 =
-        "NEW (v0.7.1 — wrapWithProof + anti-replay usedNonces)";
-    prevRecord.contract_status.JanusERC20_impl_v071 =
-        "NEW (v0.7.1 — wrapWithProof + anti-replay usedNonces)";
+    prevRecord.contract_status.JanusFlow_impl_aggregate =
+        "NEW (wrapWithProof + anti-replay usedNonces, paired with AmountDiscloseAggregateVerifier)";
+    prevRecord.contract_status.JanusERC20_impl_aggregate =
+        "NEW (wrapWithProof + anti-replay usedNonces, paired with AmountDiscloseAggregateVerifier)";
 
     // Add new tx hashes
     Object.assign(prevRecord.tx_hashes, txHashes);
 
-    prevRecord.post_deploy_checks_v071 = checkResults;
+    prevRecord.post_deploy_checks_aggregate = checkResults;
 
     prevRecord.ceremony.circuits = {
         confidential_transfer_aggregate: {
@@ -425,8 +425,8 @@ async function main() {
 
     console.log("\n=== SUMMARY ===");
     console.log("AmountDiscloseAggregateVerifier:", amtVerifierAddress);
-    console.log("JanusFlow impl v0.7.1:          ", jfImplAddress);
-    console.log("JanusERC20 impl v0.7.1:         ", erc20ImplAddress);
+    console.log("JanusFlow impl (aggregate):     ", jfImplAddress);
+    console.log("JanusERC20 impl (aggregate):    ", erc20ImplAddress);
     console.log("All post-upgrade checks:        ", allOk ? "PASS" : "FAIL — review above");
 
     if (!allOk) {

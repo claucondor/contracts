@@ -164,7 +164,7 @@ Existing JanusFT testnet address (testnet-claucondor, 0x7599043aea001283) is unc
 
 ---
 
-## Amount-disclose integration (v0.7.1)
+## Amount-disclose integration (aggregate-paired impls)
 
 Date: 2026-06-05
 Branch: feat/aggregate-commitment (appended)
@@ -172,7 +172,8 @@ Branch: feat/aggregate-commitment (appended)
 ### What changed
 
 The wrap path now uses `wrapWithProof()` backed by the `AmountDiscloseAggregateVerifier` circuit.
-This replaces the old `wrap()` function which called the incompatible v0.3 windowed-Pedersen verifier.
+This replaces the old `wrap()` function which called the prior windowed-Pedersen verifier
+(incompatible with the 2-gen Pedersen accumulator used by shieldedTransfer).
 
 The circuit (`amount_disclose_aggregate.circom`, 6,163 constraints) proves:
 
@@ -197,8 +198,8 @@ Public input layout (fixed — SDK depends on this order):
 | Contract | Address | Status |
 |----------|---------|--------|
 | AmountDiscloseAggregateVerifier | `0xa80283baB7fcEFC2c75De43DB5a1cBF00E96B984` | NEW — test zkey |
-| JanusFlow impl v0.7.1 | `0x4D8f10B2f7CFdc0ef662f664fFd2fe8d671596db` | NEW |
-| JanusERC20 impl v0.7.1 | `0x73e2C552aADaaB673CB7620b6B2317487cf54B99` | NEW |
+| JanusFlow_impl_aggregate | `0x4D8f10B2f7CFdc0ef662f664fFd2fe8d671596db` | NEW (aggregate-paired impl) |
+| JanusERC20_impl_aggregate | `0x73e2C552aADaaB673CB7620b6B2317487cf54B99` | NEW (aggregate-paired impl) |
 
 Existing proxies upgraded in place (same addresses):
 - JanusFlow proxy: `0x9A83732417947Ef9b7AEa64bF807a345267c2FdA`
@@ -209,9 +210,9 @@ Existing proxies upgraded in place (same addresses):
 | Step | Flow tx |
 |------|---------|
 | AmountDiscloseAggregateVerifier deploy | `6c5fd9d62156626ec4276865582f8cb69e058b94580fbaffd29df5aae255bfcf` |
-| JanusFlow impl v0.7.1 deploy | `13f3cbc2b48cb99a3b30d386c0d88535055356c807587d485b5e339490a689ff` |
+| JanusFlow_impl_aggregate deploy | `13f3cbc2b48cb99a3b30d386c0d88535055356c807587d485b5e339490a689ff` |
 | JanusFlow proxy upgrade | `35a4c32e2e8c82c3fe0351e5deb4a09e692ec698916025811580c612b05be28d` |
-| JanusERC20 impl v0.7.1 deploy | `f5c5365311f61754f2dfeaa94f1256655259c6afaf397ecf37130a060e48cc6d` |
+| JanusERC20_impl_aggregate deploy | `f5c5365311f61754f2dfeaa94f1256655259c6afaf397ecf37130a060e48cc6d` |
 | JanusERC20 proxy upgrade | `1a3ed4eeacaec48fcf97155b0a2d1d2f23d17920c9e53ad35c775388761f1813` |
 | JanusFlow setAmountDiscloseVerifier | `01bf13dde8cdd442590e13a999473c4fd4b1820377db84dd643e1830f790a5bc` |
 | JanusERC20 setAmountDiscloseVerifier | `6e79ca3eec063ee10fe45fddc82968f7db888ec9dfb14a794487bf3e758504f1` |
