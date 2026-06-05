@@ -107,8 +107,22 @@
   },
   "cadence_contracts": {
     "JanusFT": {
-      "address": "0x7599043aea001283",
-      "note": "REUSED from testnet-claucondor account — JanusFT Cadence side unchanged"
+      "address": "0xc4e8f99915893a2f",
+      "deployer": "v066-admin",
+      "deployed_tx": "94ec21259b0e5f7ed4f86fcb742f511dda526e73b0cb4b4a5b26b904765dad7a",
+      "setup_tx": "d5a3c119d35a194659a573c6cf9ef11a73a6ad8abe10c42b46a6436b96ccbf93",
+      "selector_fix_tx": "e44e12eb7751e9373f4180f5120da5afeddca098f26e5d1f37a1e6661c652963",
+      "encode_abi_fix_tx": "applied at seq=100 (EVM.encodeABIWithSignature fix — tx hash not captured; check flowscan account c4e8f99915893a2f)",
+      "underlying": "MockFT @ 0x7599043aea001283",
+      "version": "0.7.0",
+      "smoke": "smoke_pass=true — see deployments/janusft-aggregate-smoke.json",
+      "smoke_tx_hashes": {
+        "adminReset_before": "31fffd462096821d73876f23d914db68ad9fca05741c3e9e830d9e6a8c8fae87",
+        "wrap": "040f9b79017734773942fbf6a0056e3af190531ff61209e4b3c37d5fd1f5afa6",
+        "shieldedTransfer": "8cbe2a9b060f71e251ebc5d68102ccbc6770aebba1ccbbfa055eba0cb2b14609",
+        "unwrap": "f2052b0f82015f71ecb4ead772bcda921cfa3c6e5d9b71f4ea37e4b5d1987e52",
+        "adminReset_after": "0b66652bccbffc61e89d7e2e5545177c4ec4cef56f77ec265e28cc70430a85f7"
+      }
     }
   },
   "post_deploy_checks_aggregate": {
