@@ -56,12 +56,23 @@ contract JanusFlow is JanusToken {
     // -----------------------------------------------------------------------
 
     /// @notice Wrap native FLOW into a shielded commitment with anti-replay proof.
+    /// @param nonce             Anti-replay nonce. Must be unused for msg.sender.
+    /// @param commit            [commitX, commitY] — Pedersen commitment for this wrap.
+    /// @param pA                Groth16 proof element A.
+    /// @param pB                Groth16 proof element B.
+    /// @param pC                Groth16 proof element C.
+    /// @param encryptedSnapshot ECIES-encrypted snapshot of (value, blinding) for state recovery.
+    /// @param ephPubkeyX        Ephemeral public key X coordinate used in ECIES encryption.
+    /// @param ephPubkeyY        Ephemeral public key Y coordinate used in ECIES encryption.
     function wrapWithProof(
         uint256 nonce,
         uint256[2] calldata commit,
         uint256[2] calldata pA,
         uint256[2][2] calldata pB,
-        uint256[2] calldata pC
+        uint256[2] calldata pC,
+        bytes calldata encryptedSnapshot,
+        uint256 ephPubkeyX,
+        uint256 ephPubkeyY
     ) external payable {
         require(msg.value > 0, "JanusFlow: zero wrap");
         _recordFirstSnapshot(msg.sender);
@@ -83,7 +94,7 @@ contract JanusFlow is JanusToken {
 
         _wrapWithProofInternal(net, commitMem, proofArr, nonce);
 
-        emit WrapWithSnapshot(msg.sender, net, "", 0, 0);
+        emit WrapWithSnapshot(msg.sender, net, encryptedSnapshot, ephPubkeyX, ephPubkeyY);
     }
 
     /// @dev Internal implementation called after nonce/fee checks.

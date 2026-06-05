@@ -208,13 +208,25 @@ contract JanusERC20 is JanusToken {
     // -----------------------------------------------------------------------
 
     /// @notice Wrap ERC20 tokens into a shielded commitment with anti-replay proof.
+    /// @param amount            Gross ERC20 token amount to wrap (transferFrom pulls this).
+    /// @param nonce             Anti-replay nonce. Must be unused for msg.sender.
+    /// @param commit            [commitX, commitY] — Pedersen commitment for the net amount.
+    /// @param pA                Groth16 proof element A.
+    /// @param pB                Groth16 proof element B.
+    /// @param pC                Groth16 proof element C.
+    /// @param encryptedSnapshot ECIES-encrypted snapshot of (value, blinding) for state recovery.
+    /// @param ephPubkeyX        Ephemeral public key X coordinate used in ECIES encryption.
+    /// @param ephPubkeyY        Ephemeral public key Y coordinate used in ECIES encryption.
     function wrapWithProof(
         uint256 amount,
         uint256 nonce,
         uint256[2] calldata commit,
         uint256[2] calldata pA,
         uint256[2][2] calldata pB,
-        uint256[2] calldata pC
+        uint256[2] calldata pC,
+        bytes calldata encryptedSnapshot,
+        uint256 ephPubkeyX,
+        uint256 ephPubkeyY
     ) external {
         require(amount > 0, "JanusERC20: zero wrap");
         _recordFirstSnapshot(msg.sender);
@@ -265,7 +277,7 @@ contract JanusERC20 is JanusToken {
         totalLocked += net;
 
         emit Wrapped(msg.sender, net);
-        emit WrapWithSnapshot(msg.sender, net, "", 0, 0);
+        emit WrapWithSnapshot(msg.sender, net, encryptedSnapshot, ephPubkeyX, ephPubkeyY);
     }
 
     // -----------------------------------------------------------------------

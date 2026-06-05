@@ -264,7 +264,10 @@ function wrapWithProof(
     uint256[2] calldata commit,
     uint256[2] calldata pA,
     uint256[2][2] calldata pB,
-    uint256[2] calldata pC
+    uint256[2] calldata pC,
+    bytes calldata encryptedSnapshot,
+    uint256 ephPubkeyX,
+    uint256 ephPubkeyY
 ) external payable
 ```
 
@@ -276,9 +279,17 @@ function wrapWithProof(
     uint256[2] calldata commit,
     uint256[2] calldata pA,
     uint256[2][2] calldata pB,
-    uint256[2] calldata pC
+    uint256[2] calldata pC,
+    bytes calldata encryptedSnapshot,
+    uint256 ephPubkeyX,
+    uint256 ephPubkeyY
 ) external
 ```
+
+The three snapshot parameters (`encryptedSnapshot`, `ephPubkeyX`, `ephPubkeyY`) are emitted
+in the `WrapWithSnapshot` event. The contract does not validate their content — encoding is
+the SDK's responsibility (ECIES to the user's MemoKey). These parameters enable state recovery
+by scanning `WrapWithSnapshot` events without relying on localStorage.
 
 **Circuit artifacts for SDK:**
 - WASM: `circuits/aggregate-ceremony/build/amount_disclose_aggregate_js/amount_disclose_aggregate.wasm`

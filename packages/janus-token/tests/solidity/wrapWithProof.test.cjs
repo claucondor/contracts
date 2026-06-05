@@ -98,15 +98,33 @@ describe("wrapWithProof: real amount-disclose verifier", function () {
     expect(commitX).to.equal(expectedC.x, "proof commitX matches local commitment");
     expect(commitY).to.equal(expectedC.y, "proof commitY matches local commitment");
 
+    // dummy non-empty encryptedSnapshot + ephemeral pubkey (contract emits but does not validate)
+    const dummySnapshot = "0x" + "ab".repeat(32);
+    const dummyEphX = 12345678901234567890n;
+    const dummyEphY = 98765432109876543210n;
+
     const tx = await janusFlow.connect(alice).wrapWithProof(
       nonce,
       [commitX, commitY],
       [proof.pA[0], proof.pA[1]],
       [[proof.pB[0][0], proof.pB[0][1]], [proof.pB[1][0], proof.pB[1][1]]],
       [proof.pC[0], proof.pC[1]],
+      dummySnapshot,
+      dummyEphX,
+      dummyEphY,
       { value: amount }
     );
     await tx.wait();
+
+    // Verify event emits real (non-empty) snapshot data
+    const receipt = await tx.wait();
+    const wrapEvent = receipt.logs
+      .map(log => { try { return janusFlow.interface.parseLog(log); } catch { return null; } })
+      .find(e => e && e.name === "WrapWithSnapshot");
+    expect(wrapEvent).to.not.be.null;
+    expect(wrapEvent.args.encryptedSnapshot).to.equal(dummySnapshot, "event encryptedSnapshot non-empty");
+    expect(wrapEvent.args.ephPubkeyX).to.equal(dummyEphX, "event ephPubkeyX correct");
+    expect(wrapEvent.args.ephPubkeyY).to.equal(dummyEphY, "event ephPubkeyY correct");
 
     // Commitment should be [amount]G + [blinding]H from identity
     const [cx, cy] = await janusFlow.balanceOfCommitmentXY(alice.address);
@@ -139,6 +157,9 @@ describe("wrapWithProof: real amount-disclose verifier", function () {
         [proof.pA[0], proof.pA[1]],
         [[proof.pB[0][0], proof.pB[0][1]], [proof.pB[1][0], proof.pB[1][1]]],
         [proof.pC[0], proof.pC[1]],
+        "0x" + "cd".repeat(32),
+        11111n,
+        22222n,
         { value: wrongAmount }
       )
     ).to.be.revertedWith("JanusFlow: invalid amount_disclose proof");
@@ -162,6 +183,9 @@ describe("wrapWithProof: real amount-disclose verifier", function () {
       [proof.pA[0], proof.pA[1]],
       [[proof.pB[0][0], proof.pB[0][1]], [proof.pB[1][0], proof.pB[1][1]]],
       [proof.pC[0], proof.pC[1]],
+      "0x" + "ef".repeat(32),
+      33333n,
+      44444n,
       { value: amount }
     );
 
@@ -173,6 +197,9 @@ describe("wrapWithProof: real amount-disclose verifier", function () {
         [proof.pA[0], proof.pA[1]],
         [[proof.pB[0][0], proof.pB[0][1]], [proof.pB[1][0], proof.pB[1][1]]],
         [proof.pC[0], proof.pC[1]],
+        "0x" + "ef".repeat(32),
+        33333n,
+        44444n,
         { value: amount }
       )
     ).to.be.revertedWith("JanusFlow: nonce used");
@@ -197,6 +224,9 @@ describe("wrapWithProof: real amount-disclose verifier", function () {
         [proof.pA[0], proof.pA[1]],
         [[proof.pB[0][0], proof.pB[0][1]], [proof.pB[1][0], proof.pB[1][1]]],
         [proof.pC[0], proof.pC[1]],
+        "0x" + "12".repeat(32),
+        55555n,
+        66666n,
         { value: amount }
       )
     ).to.be.revertedWith("JanusFlow: invalid amount_disclose proof");
@@ -228,6 +258,9 @@ describe("wrapWithProof: real amount-disclose verifier", function () {
       [proof1.pA[0], proof1.pA[1]],
       [[proof1.pB[0][0], proof1.pB[0][1]], [proof1.pB[1][0], proof1.pB[1][1]]],
       [proof1.pC[0], proof1.pC[1]],
+      "0x" + "a1".repeat(32),
+      77777n,
+      88888n,
       { value: amount1 }
     );
 
@@ -237,6 +270,9 @@ describe("wrapWithProof: real amount-disclose verifier", function () {
       [proof2.pA[0], proof2.pA[1]],
       [[proof2.pB[0][0], proof2.pB[0][1]], [proof2.pB[1][0], proof2.pB[1][1]]],
       [proof2.pC[0], proof2.pC[1]],
+      "0x" + "b2".repeat(32),
+      99999n,
+      11111n,
       { value: amount2 }
     );
 
@@ -278,6 +314,9 @@ describe("wrapWithProof: real amount-disclose verifier", function () {
       [amtProof.pA[0], amtProof.pA[1]],
       [[amtProof.pB[0][0], amtProof.pB[0][1]], [amtProof.pB[1][0], amtProof.pB[1][1]]],
       [amtProof.pC[0], amtProof.pC[1]],
+      "0x" + "ff".repeat(32),
+      111111n,
+      222222n,
       { value: wrapAmount }
     );
 

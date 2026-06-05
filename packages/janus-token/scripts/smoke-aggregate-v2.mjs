@@ -35,7 +35,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { execSync } from "child_process";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
-import { Interface, JsonRpcProvider } from "ethers";
+import { Interface, JsonRpcProvider, ethers } from "ethers";
 import * as snarkjs from "snarkjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -354,14 +354,27 @@ async function main() {
 
     const amtProof = applyPiBSwap(amtProofRaw);
 
+    // Dummy non-empty encryptedSnapshot + ephemeral pubkey for smoke test.
+    // The contract emits these values but does not validate them — real ECIES
+    // encryption is done client-side in the SDK.
+    const smokeSnapshot = "0x" + Array.from(crypto.getRandomValues(new Uint8Array(32)))
+        .map(b => b.toString(16).padStart(2, "0")).join("");
+    const smokeEphX = BigInt("0x" + Array.from(crypto.getRandomValues(new Uint8Array(16)))
+        .map(b => b.toString(16).padStart(2, "0")).join(""));
+    const smokeEphY = BigInt("0x" + Array.from(crypto.getRandomValues(new Uint8Array(16)))
+        .map(b => b.toString(16).padStart(2, "0")).join(""));
+
     // Encode wrapWithProof calldata
-    // signature: wrapWithProof(uint256 nonce, uint256[2] commit, uint256[2] pA, uint256[2][2] pB, uint256[2] pC)
+    // signature: wrapWithProof(nonce, commit, pA, pB, pC, encryptedSnapshot, ephPubkeyX, ephPubkeyY)
     const wrapCalldata = jfIface.encodeFunctionData("wrapWithProof", [
         wrapNonce,
         [pubSigs[1], pubSigs[2]],           // commit [x, y]
         [amtProof.pA[0], amtProof.pA[1]],  // pA
         [[amtProof.pB[0][0], amtProof.pB[0][1]], [amtProof.pB[1][0], amtProof.pB[1][1]]], // pB
         [amtProof.pC[0], amtProof.pC[1]],  // pC
+        smokeSnapshot,                       // encryptedSnapshot (non-empty dummy)
+        smokeEphX,                           // ephPubkeyX
+        smokeEphY,                           // ephPubkeyY
     ]);
 
     console.log("  Sending wrapWithProof tx (1 FLOW, admin COA)...");
@@ -405,6 +418,37 @@ async function main() {
         : (initCX === 0n && initCY === 1n ? false : "accumulated");
     console.log(`  Commitment after:    (${postWrapCX}, ${postWrapCY})`);
 
+    // Verify WrapWithSnapshot event has non-empty encryptedSnapshot
+    const wrapWithSnapshotSig = "WrapWithSnapshot(address,uint256,bytes,uint256,uint256)";
+    const wrapEventTopic = ethers.id(wrapWithSnapshotSig);
+    let snapshotInEvent = null;
+    let ephXInEvent = null;
+    let ephYInEvent = null;
+    let snapshotEventOk = false;
+    if (wrapEvmTxHash) {
+        try {
+            const receipt = await provider.getTransactionReceipt(wrapEvmTxHash);
+            if (receipt) {
+                for (const log of receipt.logs) {
+                    if (log.topics[0] && log.topics[0].toLowerCase() === wrapEventTopic.toLowerCase()) {
+                        const decoded = jfIface.parseLog({ topics: log.topics, data: log.data });
+                        if (decoded) {
+                            snapshotInEvent = decoded.args.encryptedSnapshot;
+                            ephXInEvent     = decoded.args.ephPubkeyX?.toString();
+                            ephYInEvent     = decoded.args.ephPubkeyY?.toString();
+                            snapshotEventOk = snapshotInEvent && snapshotInEvent !== "0x" && snapshotInEvent.length > 2;
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn("  Could not verify WrapWithSnapshot event:", e.message);
+        }
+    }
+    console.log(`  encryptedSnapshot in event: ${snapshotInEvent ?? "(not read)"} — ${snapshotEventOk ? "NON-EMPTY OK" : "WARN: empty or not found"}`);
+    console.log(`  ephPubkeyX in event:        ${ephXInEvent ?? "(not read)"}`);
+    console.log(`  ephPubkeyY in event:        ${ephYInEvent ?? "(not read)"}`);
+
     results.steps.step1_wrap = {
         wrap_amount_attoflow: WRAP_AMOUNT.toString(),
         blinding: wrapBlinding.toString(),
@@ -416,11 +460,16 @@ async function main() {
         delta_matches_wrap: wrapDeltaOk,
         commitment_after_x: postWrapCX.toString(),
         commitment_after_y: postWrapCY.toString(),
+        encrypted_snapshot_in_event: snapshotInEvent,
+        snapshot_non_empty: snapshotEventOk,
         tx_hashes: { flow: wrapFlowTxId, evm: wrapEvmTxHash },
     };
 
     if (!wrapDeltaOk) {
         throw new Error(`STOP: wrapWithProof did not increase totalLocked by expected amount. delta=${wrapDelta}, expected=${WRAP_AMOUNT}`);
+    }
+    if (!snapshotEventOk) {
+        console.warn("  WARN: WrapWithSnapshot event has empty encryptedSnapshot — proceeding (event may be indexing lag)");
     }
 
     // ── Step 2: ConfidentialTransferAggregateVerifier standalone probe ─────────
@@ -536,6 +585,7 @@ async function main() {
         step0_verifier_is_aggregate:      addrIsNew,
         step1_amt_disclose_proof_ok:      amtProofOk,
         step1_wrap_delta_ok:              wrapDeltaOk,
+        step1_snapshot_non_empty:         snapshotEventOk,
         step2_transfer_verifier_offchain: aggProofOkOffChain,
         step2_transfer_verifier_onchain:  aggProofOkOnChain,
         step3_homomorphism_ok:            homomorphismOk,

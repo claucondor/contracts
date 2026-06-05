@@ -114,6 +114,9 @@ describe("JanusFlow aggregate commitment: wrap → receive × 2 → shieldedTran
       fakePa,
       fakePb,
       fakePc,
+      "0x" + "aa".repeat(32),
+      1234567n,
+      8901234n,
       { value: WRAP_V }
     );
 
@@ -140,6 +143,9 @@ describe("JanusFlow aggregate commitment: wrap → receive × 2 → shieldedTran
       nonce2,
       [bobTxCommit.x, bobTxCommit.y],
       fakePa, fakePb, fakePc,
+      "0x" + "bb".repeat(32),
+      2345678n,
+      9012345n,
       { value: HALF_FLOW }
     );
 
@@ -162,6 +168,9 @@ describe("JanusFlow aggregate commitment: wrap → receive × 2 → shieldedTran
       nonce3,
       [carolTxCommit.x, carolTxCommit.y],
       fakePa, fakePb, fakePc,
+      "0x" + "cc".repeat(32),
+      3456789n,
+      1234567n,
       { value: HALF_FLOW }
     );
 
