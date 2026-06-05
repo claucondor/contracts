@@ -1,5 +1,5 @@
 {
-  "version": "0.7.0",
+  "version": "0.7.1",
   "date": "2026-06-05",
   "network": "flow-evm-testnet",
   "chainId": 545,
@@ -19,7 +19,10 @@
     "BabyJub": "0x27139AFda7425f51F68D32e0A38b7D43BcB0f870",
     "AmountDiscloseVerifier": "0xD0ED3936530258C278f5357C1dB709ad34768352",
     "MemoKeyRegistry": "0x05D104962ff087441f26BA11A1E1C3b9E091D663",
-    "MockUSDC": "0x686E8d90A7B608540cAF46E527fD8a5631A1b658"
+    "MockUSDC": "0x686E8d90A7B608540cAF46E527fD8a5631A1b658",
+    "AmountDiscloseAggregateVerifier": "0xa80283baB7fcEFC2c75De43DB5a1cBF00E96B984",
+    "JanusFlow_impl_v071": "0x4D8f10B2f7CFdc0ef662f664fFd2fe8d671596db",
+    "JanusERC20_impl_v071": "0x73e2C552aADaaB673CB7620b6B2317487cf54B99"
   },
   "contract_status": {
     "Pedersen2Gen_library": "NEW (stateless, reusable, homomorphic point operations)",
@@ -29,9 +32,12 @@
     "JanusERC20_impl": "NEW (v0.7.0 — 2-gen Pedersen aggregate commitment)",
     "JanusERC20_proxy": "NEW (UUPS, initialized with aggregate verifier + Pedersen2Gen)",
     "BabyJub": "REUSED (stateless — no corruption risk)",
-    "AmountDiscloseVerifier": "REUSED (stateless — no corruption risk)",
+    "AmountDiscloseVerifier": "RETIRED — replaced by AmountDiscloseAggregateVerifier in v0.7.1",
     "MemoKeyRegistry": "REUSED (shared registry — unaffected by stack change)",
-    "MockUSDC": "REUSED (testnet underlying token)"
+    "MockUSDC": "REUSED (testnet underlying token)",
+    "AmountDiscloseAggregateVerifier": "NEW (test zkey — single-contributor, testnet only; 6,163 constraints)",
+    "JanusFlow_impl_v071": "NEW (v0.7.1 — wrapWithProof + anti-replay usedNonces)",
+    "JanusERC20_impl_v071": "NEW (v0.7.1 — wrapWithProof + anti-replay usedNonces)"
   },
   "tx_hashes": {
     "pedersen2gen_deploy": "e8bdb405db8b36ad930ff596761d1c5130093b272771ad18847b57b1e752c60f",
@@ -39,7 +45,14 @@
     "janusflow_impl_deploy": "97c6f4ba175d4587a9047a7d64ab85a921332763117e651cef4b9390c88b7863",
     "janusflow_proxy_deploy": "229cbcda47154463a124a479dc3c3da97843c2ddbe480e7f9cbd38da3fe1d4b0",
     "januserc20_impl_deploy": "b6e3e1780ca95f125e1e3abab29e5b44712ce788ce738ff5359524bff80e11e0",
-    "januserc20_proxy_deploy": "df36ac177f9eb6ec5f9cf704bb4fac6412f29a54eba2d5ce87cd71ae5349cb71"
+    "januserc20_proxy_deploy": "df36ac177f9eb6ec5f9cf704bb4fac6412f29a54eba2d5ce87cd71ae5349cb71",
+    "amt_disclose_verifier_deploy": "6c5fd9d62156626ec4276865582f8cb69e058b94580fbaffd29df5aae255bfcf",
+    "janusflow_impl_v071_deploy": "13f3cbc2b48cb99a3b30d386c0d88535055356c807587d485b5e339490a689ff",
+    "janusflow_upgrade": "35a4c32e2e8c82c3fe0351e5deb4a09e692ec698916025811580c612b05be28d",
+    "januserc20_impl_v071_deploy": "f5c5365311f61754f2dfeaa94f1256655259c6afaf397ecf37130a060e48cc6d",
+    "januserc20_upgrade": "1a3ed4eeacaec48fcf97155b0a2d1d2f23d17920c9e53ad35c775388761f1813",
+    "janusflow_set_adv": "01bf13dde8cdd442590e13a999473c4fd4b1820377db84dd643e1830f790a5bc",
+    "januserc20_set_adv": "6e79ca3eec063ee10fe45fddc82968f7db888ec9dfb14a794487bf3e758504f1"
   },
   "post_deploy_checks": {
     "janusflow": {
@@ -68,7 +81,17 @@
     "pot": "pot18 from Hermez (powersOfTau28_hez_final_18.ptau)",
     "constraints": 18620,
     "zkey_path": "circuits/aggregate-ceremony/setup/confidential_transfer_aggregate_test.zkey",
-    "production_required": "multi-party Phase 2 with ≥3 contributors before mainnet"
+    "production_required": "multi-party Phase 2 with ≥3 contributors before mainnet",
+    "circuits": {
+      "confidential_transfer_aggregate": {
+        "constraints": 18620,
+        "zkey": "circuits/aggregate-ceremony/setup/confidential_transfer_aggregate_test.zkey"
+      },
+      "amount_disclose_aggregate": {
+        "constraints": 6163,
+        "zkey": "circuits/aggregate-ceremony/setup/amount_disclose_aggregate_test.zkey"
+      }
+    }
   },
   "explorer": {
     "JanusFlow_proxy": "https://evm-testnet.flowscan.io/address/0x9A83732417947Ef9b7AEa64bF807a345267c2FdA",
@@ -78,6 +101,22 @@
     "JanusFT": {
       "address": "0x7599043aea001283",
       "note": "REUSED from testnet-claucondor account — JanusFT Cadence side unchanged"
+    }
+  },
+  "post_deploy_checks_v071": {
+    "janusflow": {
+      "owner_is_admin_coa": true,
+      "babyjub_correct": true,
+      "transfer_verifier_is_agg": true,
+      "amount_disclose_is_new_verifier": true,
+      "pedersen2gen_correct": true
+    },
+    "januserc20": {
+      "owner_is_admin_coa": true,
+      "babyjub_correct": true,
+      "transfer_verifier_is_agg": true,
+      "amount_disclose_is_new_verifier": true,
+      "pedersen2gen_correct": true
     }
   }
 }
