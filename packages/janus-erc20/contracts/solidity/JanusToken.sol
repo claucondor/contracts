@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: MIT
 // EXPERIMENTAL — NOT AUDITED — DO NOT USE FOR PRODUCTION
 //
-// JanusToken.sol — Abstract base for openjanus confidential tokens (v0.7.0).
+// JanusToken.sol — Abstract base for openjanus confidential tokens (v0.7.1).
+//
+// v0.7.1 — amount-disclose aggregate verifier integration
+//
+// Adds wrapWithProof() path: AmountDiscloseAggregateVerifier verifies that the
+// submitted Pedersen commitment encodes the wrap amount with a valid blinding
+// factor. Anti-replay via usedNonces[caller][nonce].
+// Public input layout: [amount, commitX, commitY, nonce]
 //
 // v0.7.0 — 2-generator Pedersen aggregate commitment upgrade
 //
@@ -22,8 +29,9 @@
 //   slot 54   totalSupplyCommitment.x
 //   slot 55   totalSupplyCommitment.y
 //   slot 56   totalLocked
-//   slot 57   pedersen2Gen          address  <-- NEW
+//   slot 57   pedersen2Gen          address  <-- NEW in v0.7.0
 //   slot 58..97  __gap[40]          reserved
+//   slot 98   usedNonces            mapping(address => mapping(uint256 => bool))  <-- NEW in v0.7.1
 
 pragma solidity ^0.8.20;
 
@@ -53,12 +61,13 @@ interface IConfidentialTransferVerifier {
     ) external view returns (bool);
 }
 
+/// @dev AmountDiscloseAggregateVerifier — 4 public inputs: [amount, commitX, commitY, nonce]
 interface IAmountDiscloseVerifier {
     function verifyProof(
         uint[2] calldata _pA,
         uint[2][2] calldata _pB,
         uint[2] calldata _pC,
-        uint[3] calldata _pubSignals
+        uint[4] calldata _pubSignals
     ) external view returns (bool);
 }
 
@@ -109,6 +118,10 @@ abstract contract JanusToken is
     /// Reserved storage for future state vars.
     uint256[40] private __gap;
 
+    /// Anti-replay nonces for wrapWithProof.
+    /// usedNonces[caller][nonce] = true after the nonce has been consumed.
+    mapping(address => mapping(uint256 => bool)) public usedNonces;
+
     // -----------------------------------------------------------------------
     // Events
     // -----------------------------------------------------------------------
@@ -151,6 +164,17 @@ abstract contract JanusToken is
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
+
+    // -----------------------------------------------------------------------
+    // Verifier admin
+    // -----------------------------------------------------------------------
+
+    /// @notice Update the AmountDiscloseVerifier address. Owner-only.
+    /// Used after UUPS upgrades to point to the latest verifier contract.
+    function setAmountDiscloseVerifier(address _verifier) external onlyOwner {
+        require(_verifier != address(0), "JanusToken: zero amountDiscloseVerifier");
+        amountDiscloseVerifier = IAmountDiscloseVerifier(_verifier);
+    }
 
     // -----------------------------------------------------------------------
     // View helpers
@@ -218,7 +242,8 @@ abstract contract JanusToken is
     function _wrap(
         uint256 amount,
         uint256[2] calldata txCommit,
-        uint256[8] calldata amountProof
+        uint256[8] calldata amountProof,
+        uint256 nonce
     ) internal virtual;
 
     function _unwrap(
@@ -234,16 +259,19 @@ abstract contract JanusToken is
     // Internal helpers
     // -----------------------------------------------------------------------
 
+    /// @dev Verify an amount-disclose proof with nonce binding.
+    /// Public input layout: [amount, commitX, commitY, nonce]
     function _verifyAmountDisclose(
         uint256 claimedAmount,
         uint256[2] calldata commit,
-        uint256[8] calldata proof
+        uint256[8] calldata proof,
+        uint256 nonce
     ) internal view returns (bool) {
         return amountDiscloseVerifier.verifyProof(
             [proof[0], proof[1]],
             [[proof[2], proof[3]], [proof[4], proof[5]]],
             [proof[6], proof[7]],
-            [claimedAmount, commit[0], commit[1]]
+            [claimedAmount, commit[0], commit[1], nonce]
         );
     }
 

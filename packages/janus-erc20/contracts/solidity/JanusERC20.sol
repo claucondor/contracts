@@ -185,20 +185,44 @@ contract JanusERC20 is JanusToken {
     }
 
     // -----------------------------------------------------------------------
-    // Public wrap
+    // Public wrapWithProof
+    //
+    // Requires a Groth16 proof from the AmountDiscloseAggregate circuit proving:
+    //   Commit(amount, blinding) = (commitX, commitY)
+    // where amount is the net token amount after any fee deduction.
+    //
+    // Public input layout: [amount, commitX, commitY, nonce]
+    //   - amount:  net wrap amount (ERC20 token units, after fee deduction)
+    //   - commit:  the Pedersen commitment point being credited to the caller
+    //   - nonce:   caller-chosen unique anti-replay value
+    //
+    // The ERC20 amount comes from a function parameter (not msg.value).
+    // transferFrom pulls tokens from the caller first, then proof is verified.
+    //
+    // @param amount  Gross ERC20 token amount to wrap (transferFrom pulls this).
+    // @param nonce   Anti-replay nonce. Must be unused for msg.sender.
+    // @param commit  [commitX, commitY] — Pedersen commitment for the net amount.
+    // @param pA      Groth16 proof element A.
+    // @param pB      Groth16 proof element B.
+    // @param pC      Groth16 proof element C.
     // -----------------------------------------------------------------------
 
-    function wrap(
+    /// @notice Wrap ERC20 tokens into a shielded commitment with anti-replay proof.
+    function wrapWithProof(
         uint256 amount,
-        uint256[2] calldata txCommit,
-        uint256[8] calldata amountProof,
-        bytes calldata encryptedSnapshot,
-        uint256 ephPubkeyX,
-        uint256 ephPubkeyY
+        uint256 nonce,
+        uint256[2] calldata commit,
+        uint256[2] calldata pA,
+        uint256[2][2] calldata pB,
+        uint256[2] calldata pC
     ) external {
         require(amount > 0, "JanusERC20: zero wrap");
         _recordFirstSnapshot(msg.sender);
 
+        require(!usedNonces[msg.sender][nonce], "JanusERC20: nonce used");
+        usedNonces[msg.sender][nonce] = true;
+
+        // Pull gross amount from caller
         bool okPull = IERC20(underlying).transferFrom(msg.sender, address(this), amount);
         require(okPull, "JanusERC20: transferFrom failed");
 
@@ -210,9 +234,38 @@ contract JanusERC20 is JanusToken {
             emit FeeCollected(msg.sender, fee, "wrap");
         }
 
-        _wrap(net, txCommit, amountProof);
+        require(net > 0,         "JanusERC20: zero net wrap");
+        require(net <= MAX_WRAP, "JanusERC20: exceeds MAX_WRAP");
 
-        emit WrapWithSnapshot(msg.sender, net, encryptedSnapshot, ephPubkeyX, ephPubkeyY);
+        // Verify the amount-disclose proof: proves commit = [net]G + [blinding]H
+        require(
+            amountDiscloseVerifier.verifyProof(
+                [pA[0], pA[1]],
+                [[pB[0][0], pB[0][1]], [pB[1][0], pB[1][1]]],
+                [pC[0], pC[1]],
+                [net, commit[0], commit[1], nonce]
+            ),
+            "JanusERC20: invalid amount_disclose proof"
+        );
+
+        // Accumulate commitment into caller's shielded balance
+        Point memory current = _effectiveCommitment(msg.sender);
+        (uint256 nx, uint256 ny) = pedersen2Gen.addCommits(
+            current.x, current.y,
+            commit[0], commit[1]
+        );
+        commitments[msg.sender] = Point({ x: nx, y: ny });
+
+        (uint256 sx, uint256 sy) = pedersen2Gen.addCommits(
+            totalSupplyCommitment.x, totalSupplyCommitment.y,
+            commit[0], commit[1]
+        );
+        totalSupplyCommitment = Point({ x: sx, y: sy });
+
+        totalLocked += net;
+
+        emit Wrapped(msg.sender, net);
+        emit WrapWithSnapshot(msg.sender, net, "", 0, 0);
     }
 
     // -----------------------------------------------------------------------
@@ -290,23 +343,16 @@ contract JanusERC20 is JanusToken {
     // Template-method overrides
     // -----------------------------------------------------------------------
 
+    /// @dev _wrap is not called by any public function in this contract.
+    /// wrapWithProof() handles the full wrap path directly.
+    /// This override satisfies the abstract base requirement; it reverts if called.
     function _wrap(
-        uint256 amount,
-        uint256[2] calldata txCommit,
-        uint256[8] calldata amountProof
-    ) internal override {
-        require(amount > 0,         "JanusERC20: zero net wrap");
-        require(amount <= MAX_WRAP, "JanusERC20: exceeds MAX_WRAP");
-
-        require(
-            _verifyAmountDisclose(amount, txCommit, amountProof),
-            "JanusERC20: invalid amount_disclose proof"
-        );
-
-        _acceptShieldedCredit(msg.sender, txCommit);
-        totalLocked += amount;
-
-        emit Wrapped(msg.sender, amount);
+        uint256,
+        uint256[2] calldata,
+        uint256[8] calldata,
+        uint256
+    ) internal pure override {
+        revert("JanusERC20: use wrapWithProof");
     }
 
     function _unwrap(
@@ -321,8 +367,10 @@ contract JanusERC20 is JanusToken {
         require(recipient != address(0),      "JanusERC20: zero recipient");
         require(totalLocked >= claimedAmount, "JanusERC20: pool exhausted");
 
+        // For unwrap, nonce is 0 — the transfer proof provides replay protection
+        // via the commitment state machine (C_old must match on-chain state).
         require(
-            _verifyAmountDisclose(claimedAmount, txCommit, amountProof),
+            _verifyAmountDisclose(claimedAmount, txCommit, amountProof, 0),
             "JanusERC20: invalid amount_disclose proof"
         );
 
