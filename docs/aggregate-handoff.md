@@ -161,3 +161,149 @@ Existing JanusFT testnet address (testnet-claucondor, 0x7599043aea001283) is unc
 - JanusERC20 proxy: https://evm-testnet.flowscan.io/address/0xD5E6a52635599E6B2296B5BfEeC617E333561ea0
 - Pedersen2Gen: https://evm-testnet.flowscan.io/address/0xb8Af0091A010E082b05d0c55E1019c3833E15760
 - AggregateVerifier: https://evm-testnet.flowscan.io/address/0x5702A545d2853b03B808aEA331f892c121b67243
+
+---
+
+## Amount-disclose integration (v0.7.1)
+
+Date: 2026-06-05
+Branch: feat/aggregate-commitment (appended)
+
+### What changed
+
+The wrap path now uses `wrapWithProof()` backed by the `AmountDiscloseAggregateVerifier` circuit.
+This replaces the old `wrap()` function which called the incompatible v0.3 windowed-Pedersen verifier.
+
+The circuit (`amount_disclose_aggregate.circom`, 6,163 constraints) proves:
+
+```
+Commit(amount, blinding) = [amount]·G + [blinding]·H
+```
+
+where `amount` equals `msg.value` (for JanusFlow) or the ERC20 transfer amount (for JanusERC20).
+Anti-replay is enforced via `usedNonces[caller][nonce]` — a per-account nonce map.
+
+Public input layout (fixed — SDK depends on this order):
+
+```
+[0] amount   = wrap amount
+[1] commitX  = commitment x-coordinate
+[2] commitY  = commitment y-coordinate
+[3] nonce    = anti-replay nonce
+```
+
+### New contracts deployed (testnet)
+
+| Contract | Address | Status |
+|----------|---------|--------|
+| AmountDiscloseAggregateVerifier | `0xa80283baB7fcEFC2c75De43DB5a1cBF00E96B984` | NEW — test zkey |
+| JanusFlow impl v0.7.1 | `0x4D8f10B2f7CFdc0ef662f664fFd2fe8d671596db` | NEW |
+| JanusERC20 impl v0.7.1 | `0x73e2C552aADaaB673CB7620b6B2317487cf54B99` | NEW |
+
+Existing proxies upgraded in place (same addresses):
+- JanusFlow proxy: `0x9A83732417947Ef9b7AEa64bF807a345267c2FdA`
+- JanusERC20 proxy: `0xD5E6a52635599E6B2296B5BfEeC617E333561ea0`
+
+### Deployment tx hashes (testnet)
+
+| Step | Flow tx |
+|------|---------|
+| AmountDiscloseAggregateVerifier deploy | `6c5fd9d62156626ec4276865582f8cb69e058b94580fbaffd29df5aae255bfcf` |
+| JanusFlow impl v0.7.1 deploy | `13f3cbc2b48cb99a3b30d386c0d88535055356c807587d485b5e339490a689ff` |
+| JanusFlow proxy upgrade | `35a4c32e2e8c82c3fe0351e5deb4a09e692ec698916025811580c612b05be28d` |
+| JanusERC20 impl v0.7.1 deploy | `f5c5365311f61754f2dfeaa94f1256655259c6afaf397ecf37130a060e48cc6d` |
+| JanusERC20 proxy upgrade | `1a3ed4eeacaec48fcf97155b0a2d1d2f23d17920c9e53ad35c775388761f1813` |
+| JanusFlow setAmountDiscloseVerifier | `01bf13dde8cdd442590e13a999473c4fd4b1820377db84dd643e1830f790a5bc` |
+| JanusERC20 setAmountDiscloseVerifier | `6e79ca3eec063ee10fe45fddc82968f7db888ec9dfb14a794487bf3e758504f1` |
+
+### Smoke test result: PASS
+
+All 7 checks passed (`deployments/aggregate-testnet-smoke.json`):
+
+| Check | Result |
+|-------|--------|
+| amountDiscloseVerifier() returns new aggregate verifier | PASS |
+| AmountDiscloseAggregate proof off-chain verification | PASS |
+| wrapWithProof{value:1e18} on-chain execution | PASS |
+| totalLocked delta = 1e18 | PASS |
+| ConfidentialTransferAggregateVerifier on-chain verifyProof | PASS |
+| Pedersen2Gen.addCommits homomorphism | PASS |
+| adminResetSlot | PASS |
+
+Key smoke event: `wrapWithProof` accepted a real Groth16 proof on Flow EVM testnet.
+EVM tx hash: `0xd842f7368b70ad16ce2f706d126500f80743ad0df28599b5d51f368c728f0d25`
+
+### Unit test count
+
+33 tests pass on local Hardhat node (up from 27):
+- `aggregate-pedersen.test.cjs` — 14 tests (Pedersen2Gen unit tests)
+- `homomorphism-onchain.test.cjs` — 5 tests (on-chain homomorphism)
+- `janus-flow-aggregate.test.cjs` — 8 tests (wrap × 3 → shieldedTransfer)
+- `wrapWithProof.test.cjs` — 6 tests (real verifier: valid proof, wrong amount, replay, wrong commit, accumulation, full scenario)
+
+### Full address list for SDK port
+
+| Contract | Address |
+|----------|---------|
+| ConfidentialTransferAggregateVerifier | `0x5702A545d2853b03B808aEA331f892c121b67243` |
+| AmountDiscloseAggregateVerifier | `0xa80283baB7fcEFC2c75De43DB5a1cBF00E96B984` |
+| Pedersen2Gen library | `0xb8Af0091A010E082b05d0c55E1019c3833E15760` |
+| JanusFlow proxy | `0x9A83732417947Ef9b7AEa64bF807a345267c2FdA` |
+| JanusERC20 proxy | `0xD5E6a52635599E6B2296B5BfEeC617E333561ea0` |
+| BabyJub | `0x27139AFda7425f51F68D32e0A38b7D43BcB0f870` |
+| MemoKeyRegistry | `0x05D104962ff087441f26BA11A1E1C3b9E091D663` |
+| MockUSDC (testnet) | `0x686E8d90A7B608540cAF46E527fD8a5631A1b658` |
+
+### API changes for SDK port
+
+**JanusFlow.wrapWithProof signature:**
+```solidity
+function wrapWithProof(
+    uint256 nonce,
+    uint256[2] calldata commit,
+    uint256[2] calldata pA,
+    uint256[2][2] calldata pB,
+    uint256[2] calldata pC
+) external payable
+```
+
+**JanusERC20.wrapWithProof signature:**
+```solidity
+function wrapWithProof(
+    uint256 amount,
+    uint256 nonce,
+    uint256[2] calldata commit,
+    uint256[2] calldata pA,
+    uint256[2][2] calldata pB,
+    uint256[2] calldata pC
+) external
+```
+
+**Circuit artifacts for SDK:**
+- WASM: `circuits/aggregate-ceremony/build/amount_disclose_aggregate_js/amount_disclose_aggregate.wasm`
+- ZKey: `circuits/aggregate-ceremony/setup/amount_disclose_aggregate_test.zkey`
+
+**Proof generation (snarkjs):**
+```js
+const { proof, publicSignals } = await snarkjs.groth16.fullProve(
+    { amount, commitX, commitY, nonce, blinding },
+    wasmPath,
+    zkeyPath
+);
+// pubSignals order: [amount, commitX, commitY, nonce]
+```
+
+### Operator next steps (SDK port only remaining)
+
+1. **SDK port** — update `@openjanus/sdk`:
+   - `computeCommitment` already uses 2-gen scheme (unchanged from prior SDK work)
+   - Add `generateAmountDiscloseProof(amount, blinding, nonce)` → `{ pA, pB, pC, commit }`
+   - Update `wrap()` SDK call → `wrapWithProof()` with new parameters
+   - Update contract addresses to the full list above
+   - Nonce management: client tracks per-account nonce counter (start at 1, increment)
+
+2. **Multi-party ceremony** — required before mainnet for both circuits
+
+3. **OFAC screening hook** — still required per mainnet checklist
+
+The contracts side is complete. Merge `feat/aggregate-commitment` after operator review.
