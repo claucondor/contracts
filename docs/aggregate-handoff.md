@@ -319,3 +319,73 @@ const { proof, publicSignals } = await snarkjs.groth16.fullProve(
 3. **OFAC screening hook** — still required per mainnet checklist
 
 The contracts side is complete. Merge `feat/aggregate-commitment` after operator review.
+
+---
+
+## Phase A closure — snapshot-aware impl upgrade (v0.7 sprint)
+
+Date: 2026-06-05
+Branch: feat/aggregate-commitment (appended)
+
+### What changed
+
+`wrapWithProof` in both JanusFlow and JanusERC20 now accepts three additional parameters:
+
+```solidity
+bytes calldata encryptedSnapshot,
+uint256 ephPubkeyX,
+uint256 ephPubkeyY
+```
+
+These are forwarded directly into the `WrapWithSnapshot` event. The contract does not validate
+their content — real ECIES encryption is the SDK's responsibility. This unblocks Phase B (SDK
+port of state-recovery via event scanning).
+
+### New impl addresses (testnet)
+
+| Contract | Address |
+|----------|---------|
+| JanusFlow impl (snapshot-aware) | `0xE9770039f240E4fdD6Ac82B5F72c6013A4FeEc46` |
+| JanusERC20 impl (snapshot-aware) | `0x4d3c4c4c04E48fcd341FB065c17788BAb4D50d8b` |
+
+Proxies unchanged:
+- JanusFlow proxy: `0x9A83732417947Ef9b7AEa64bF807a345267c2FdA`
+- JanusERC20 proxy: `0xD5E6a52635599E6B2296B5BfEeC617E333561ea0`
+
+### Upgrade tx hashes
+
+| Step | Flow tx |
+|------|---------|
+| JanusFlow impl deploy | `242f4b72076d0a50d0a97b5408f937ded827eea724d3d6a8485d83599936ab09` |
+| JanusFlow proxy upgrade | `e45d6f7744ed51eec8d092d5b71930816bf0e3f89a1e8aa869f130f113260fbb` |
+| JanusERC20 impl deploy | `39edcb8497cef43110ea209b4f03304db3f84fb5e8ac1544c5483dd118e89899` |
+| JanusERC20 proxy upgrade | `6499872d65cc620bfafbf998352fc1a3500476be4d796260c1deaab09b8bc8bc` |
+
+| Step | EVM tx |
+|------|--------|
+| JanusFlow impl deploy | `0x59e07857bb1694b4eea3174964889870d9551c6d7a7c0e68d3b5f896549a969f` |
+| JanusFlow proxy upgrade | `0xdb3e13a451a11c8040d7829221a8fdc97f1013ac634dc804ea239fd728e29526` |
+| JanusERC20 impl deploy | `0xadafa5f1fd7f9cf40a8bc8359e247140d9a4f0ea75a5c08306dcab05cd3a7049` |
+| JanusERC20 proxy upgrade | `0xf3f35841261096641734006fd5989032e6fa509757c4864915e36dc7bb013cbd` |
+
+### Smoke test result: PASS (all 8 checks)
+
+| Check | Result |
+|-------|--------|
+| amountDiscloseVerifier() = 0xa80283bab7... | PASS |
+| AmountDiscloseAggregate proof off-chain | PASS |
+| wrapWithProof{value:1e18} on-chain execution | PASS |
+| totalLocked delta = 1e18 | PASS |
+| WrapWithSnapshot encryptedSnapshot non-empty | PASS |
+| ConfidentialTransferAggregateVerifier on-chain verifyProof | PASS |
+| Pedersen2Gen.addCommits homomorphism | PASS |
+| adminResetSlot | PASS |
+
+Key event proof — step1_wrap `WrapWithSnapshot` emitted:
+- `encryptedSnapshot`: `0x9b5c93cf8999d07de8ccfe0f1e7da310044b26a9801203dc53700ed3fb1b8b3f` (non-empty)
+- `ephPubkeyX`: `50760196688077561549876905939148665004`
+- `ephPubkeyY`: `133268268911414131769998261059518392657`
+
+Full results: `deployments/aggregate-testnet-smoke.json`
+
+Phase A is closed. Phase B (SDK port) may begin.

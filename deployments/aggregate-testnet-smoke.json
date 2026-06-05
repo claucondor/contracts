@@ -1,5 +1,5 @@
 {
-  "date": "2026-06-05T03:53:35.412Z",
+  "date": "2026-06-05T04:44:25.127Z",
   "network": "flow-evm-testnet",
   "chainId": 545,
   "version": "0.7.1",
@@ -15,32 +15,34 @@
     "MemoKeyRegistry": "0x05D104962ff087441f26BA11A1E1C3b9E091D663",
     "MockUSDC": "0x686E8d90A7B608540cAF46E527fD8a5631A1b658",
     "AmountDiscloseAggregateVerifier": "0xa80283baB7fcEFC2c75De43DB5a1cBF00E96B984",
-    "JanusFlow_impl_aggregate": "0x4D8f10B2f7CFdc0ef662f664fFd2fe8d671596db",
-    "JanusERC20_impl_aggregate": "0x73e2C552aADaaB673CB7620b6B2317487cf54B99"
+    "JanusFlow_impl_aggregate": "0xE9770039f240E4fdD6Ac82B5F72c6013A4FeEc46",
+    "JanusERC20_impl_aggregate": "0x4d3c4c4c04E48fcd341FB065c17788BAb4D50d8b"
   },
   "admin_coa": "0x000000000000000000000002656f9205e386ed78",
   "steps": {
     "step0_state": {
       "amount_disclose_verifier": "0xa80283bab7fcefc2c75de43db5a1cbf00e96b984",
       "verifier_is_aggregate": true,
-      "total_locked_before": "1000000000000000000",
+      "total_locked_before": "2000000000000000000",
       "admin_commit_x": "0",
       "admin_commit_y": "1"
     },
     "step1_wrap": {
       "wrap_amount_attoflow": "1000000000000000000",
-      "blinding": "223533318963439798811721081046367319300",
-      "nonce": "1",
+      "blinding": "32577835499154024029625095160775024991",
+      "nonce": "70656194398897937001113019087358898842",
       "amount_disclose_proof_ok_offchain": true,
-      "total_locked_before": "1000000000000000000",
-      "total_locked_after": "2000000000000000000",
+      "total_locked_before": "2000000000000000000",
+      "total_locked_after": "3000000000000000000",
       "delta": "1000000000000000000",
       "delta_matches_wrap": true,
-      "commitment_after_x": "7978482871690902741636013610802732856246201066068874281983165965806193546013",
-      "commitment_after_y": "19280841453614037927216010796683540396911513874807188538572212826515158719513",
+      "commitment_after_x": "17967558460682328599583926875214632444368274241136464675631177410315661960531",
+      "commitment_after_y": "19264827199339919145103307519731283255739540322622951840387604428280052424948",
+      "encrypted_snapshot_in_event": "0x9b5c93cf8999d07de8ccfe0f1e7da310044b26a9801203dc53700ed3fb1b8b3f",
+      "snapshot_non_empty": true,
       "tx_hashes": {
-        "flow": "e1c02b12a583bc581c35b96932e22b0fcfdc180d83737c237bca9fcea51403c6",
-        "evm": "0xd842f7368b70ad16ce2f706d126500f80743ad0df28599b5d51f368c728f0d25"
+        "flow": "7d578be220e0d06fb8c1e8f5b7d51e76bd9f0d4cd2c77010fc956cad68b69ccc",
+        "evm": "0x065d0f95bd9f7d4d3fcd1747ac0e7d39dfc0dcca429066abcaf2b9698da56a43"
       }
     },
     "step2_transfer_verifier": {
@@ -53,8 +55,8 @@
     "step4_admin_reset": {
       "reset_to_identity": true,
       "tx_hashes": {
-        "flow": "b02759c7ff4c035504dd2797af4913201b16a948d134b6f1f485682f80de9cef",
-        "evm": "0x18c41a243db843d8479187ce808ece3e37d4c1b352fc0e0423f142dce743c7c2"
+        "flow": "87bb42f6e9077310eaee2d5cef1bd7cf8e9390c94c33382a81d78e8bab4b0814",
+        "evm": "0xe8862c9ed131f1a8e46c2c348543f7f8612a7aa62fde65e98674f12f22478705"
       }
     }
   },
@@ -63,6 +65,7 @@
     "step0_verifier_is_aggregate": true,
     "step1_amt_disclose_proof_ok": true,
     "step1_wrap_delta_ok": true,
+    "step1_snapshot_non_empty": true,
     "step2_transfer_verifier_offchain": true,
     "step2_transfer_verifier_onchain": true,
     "step3_homomorphism_ok": true,
