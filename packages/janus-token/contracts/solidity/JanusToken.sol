@@ -3,9 +3,16 @@
 //
 // JanusToken.sol — Abstract base for all Janus confidential tokens.
 //
-// v0.7.0 — 2-generator Pedersen aggregate commitment upgrade
+// v0.7.1 — amount-disclose aggregate verifier integration
 //
-// This version replaces the windowed-Pedersen accumulator path with the
+// This version adds the wrapWithProof() path, replacing the old wrap() function:
+//
+//   wrapWithProof() calls AmountDiscloseAggregateVerifier to verify a Groth16
+//   proof that the submitted Pedersen commitment encodes msg.value with a valid
+//   blinding factor. Public inputs: [amount, commitX, commitY, nonce].
+//   Anti-replay is enforced via usedNonces[caller][nonce].
+//
+// Previous change (v0.7.0): replaced windowed-Pedersen accumulator path with the
 // classical 2-generator commitment scheme:
 //
 //   Commit(v, r) := [v]·G + [r]·H
@@ -33,6 +40,7 @@
 //   slot 11..89  __gap[79]             uint256[79]
 //   slot 90    memoRegistry             address
 //   slot 91    pedersen2Gen             address  <-- NEW in v0.7.0
+//   slot 92    usedNonces               mapping(address => mapping(uint256 => bool))  <-- NEW in v0.7.1
 
 pragma solidity ^0.8.20;
 
@@ -62,12 +70,13 @@ interface IConfidentialTransferVerifier {
     ) external view returns (bool);
 }
 
+/// @dev AmountDiscloseAggregateVerifier — 4 public inputs: [amount, commitX, commitY, nonce]
 interface IAmountDiscloseVerifier {
     function verifyProof(
         uint[2] calldata _pA,
         uint[2][2] calldata _pB,
         uint[2] calldata _pC,
-        uint[3] calldata _pubSignals
+        uint[4] calldata _pubSignals
     ) external view returns (bool);
 }
 
@@ -151,6 +160,10 @@ abstract contract JanusToken is
 
     /// 2-generator Pedersen commitment library — homomorphic accumulator.
     IPedersen2Gen    public pedersen2Gen;                           // slot 91
+
+    /// Anti-replay nonces for wrapWithProof.
+    /// usedNonces[caller][nonce] = true after the nonce has been consumed.
+    mapping(address => mapping(uint256 => bool)) public usedNonces; // slot 92
 
     // -----------------------------------------------------------------------
     // Fee constants
@@ -243,6 +256,17 @@ abstract contract JanusToken is
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
+
+    // -----------------------------------------------------------------------
+    // Verifier admin
+    // -----------------------------------------------------------------------
+
+    /// @notice Update the AmountDiscloseVerifier address. Owner-only.
+    /// Used after UUPS upgrades to point to the latest verifier contract.
+    function setAmountDiscloseVerifier(address _verifier) external onlyOwner {
+        require(_verifier != address(0), "JanusToken: zero amountDiscloseVerifier");
+        amountDiscloseVerifier = IAmountDiscloseVerifier(_verifier);
+    }
 
     // -----------------------------------------------------------------------
     // Registry admin
@@ -423,10 +447,13 @@ abstract contract JanusToken is
     // Abstract template-method hooks
     // -----------------------------------------------------------------------
 
+    /// @dev _wrap is called AFTER nonce check and proof verification — only accumulator update needed.
+    /// amountProof and nonce are already verified by the time this is called.
     function _wrap(
         uint256 amount,
         uint256[2] calldata txCommit,
-        uint256[8] calldata amountProof
+        uint256[8] calldata amountProof,
+        uint256 nonce
     ) internal virtual;
 
     function _unwrap(
@@ -442,16 +469,19 @@ abstract contract JanusToken is
     // Internal helpers
     // -----------------------------------------------------------------------
 
+    /// @dev Verify an amount-disclose proof with nonce binding.
+    /// Public input layout: [amount, commitX, commitY, nonce]
     function _verifyAmountDisclose(
         uint256 claimedAmount,
         uint256[2] calldata commit,
-        uint256[8] calldata proof
+        uint256[8] calldata proof,
+        uint256 nonce
     ) internal view returns (bool) {
         return amountDiscloseVerifier.verifyProof(
             [proof[0], proof[1]],
             [[proof[2], proof[3]], [proof[4], proof[5]]],
             [proof[6], proof[7]],
-            [claimedAmount, commit[0], commit[1]]
+            [claimedAmount, commit[0], commit[1], nonce]
         );
     }
 
