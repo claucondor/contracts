@@ -1,0 +1,117 @@
+{
+  "date": "2026-06-05T02:10:18.242Z",
+  "network": "flow-evm-testnet",
+  "chainId": 545,
+  "version": "0.7.0",
+  "contracts": {
+    "Pedersen2Gen_library": "0xb8Af0091A010E082b05d0c55E1019c3833E15760",
+    "ConfidentialTransferAggregateVerifier": "0x5702A545d2853b03B808aEA331f892c121b67243",
+    "JanusFlow_impl": "0xf63f010c47B4861d74B6DC9CB719b40F13E1758c",
+    "JanusFlow_proxy": "0x9A83732417947Ef9b7AEa64bF807a345267c2FdA",
+    "JanusERC20_impl": "0x5757e1e3C2ED8e19D37765FbbBb6Ae9dbD28B9b9",
+    "JanusERC20_proxy": "0xD5E6a52635599E6B2296B5BfEeC617E333561ea0",
+    "BabyJub": "0x27139AFda7425f51F68D32e0A38b7D43BcB0f870",
+    "AmountDiscloseVerifier": "0xD0ED3936530258C278f5357C1dB709ad34768352",
+    "MemoKeyRegistry": "0x05D104962ff087441f26BA11A1E1C3b9E091D663",
+    "MockUSDC": "0x686E8d90A7B608540cAF46E527fD8a5631A1b658"
+  },
+  "admin_coa": "0x000000000000000000000002656f9205e386ed78",
+  "steps": {
+    "step0_initial_state": {
+      "total_locked_before": "0",
+      "admin_commitment_x": "0",
+      "admin_commitment_y": "1",
+      "is_identity": true
+    },
+    "step1_wrap": {
+      "wrap_amount_attoflow": "1000000000000000000",
+      "wrap_amount_flow": "1.0",
+      "amount_disclose_proof_ok_offchain": true,
+      "total_locked_before": "0",
+      "total_locked_after": "0",
+      "delta": "0",
+      "delta_matches_wrap": false,
+      "commitment_after_wrap_x": "0",
+      "commitment_after_wrap_y": "1",
+      "commitment_matches_tx_commit": false,
+      "tx_hashes": {
+        "flow": "97e059662328d84370eb790b5435c0fb6777b1e9a79049bd5c059665040b16ed",
+        "evm": null
+      }
+    },
+    "step2_aggregate_verifier": {
+      "proof_inputs": {
+        "v_old": "1000000000000000000",
+        "v_tx": "300000000000000000",
+        "v_new": "700000000000000000",
+        "r_old": "111222333444",
+        "r_tx": "555666777888",
+        "r_new": "999000111"
+      },
+      "commitments": {
+        "c_old": {
+          "x": "898931610211293499792004393646161255209724433658077439749983741631527251774",
+          "y": "8272584637455500737576323529071183460017665099278870447288648239608336280184"
+        },
+        "c_tx": {
+          "x": "13129760644059802596432551803951056275894072340437406488749487736572981183751",
+          "y": "16112480612641928198852438685481064523800884436093068272222055755392580422379"
+        },
+        "c_new": {
+          "x": "15516062893166214744586370863374516978023748741414049161563658654496656119013",
+          "y": "7444453395001374261094100615914853482089377420760665781143980150272681405388"
+        }
+      },
+      "off_chain_verify": true,
+      "on_chain_verify": true
+    },
+    "step3_pedersen2gen": {
+      "p_a": {
+        "x": "12348022985760884067797466241803536813952250419286634770934581482298861323816",
+        "y": "1977270292208928440386645754684461142361386864470169165201456674647586449433"
+      },
+      "p_b": {
+        "x": "15573275817140346006250137868730688841464887948991394202976075057707089306137",
+        "y": "14121934682009891201923999999876652018226469422165140910233641801939019308316"
+      },
+      "on_chain_sum_x": "12578891003341067378014308702289711395120884802528411605273861857727153951964",
+      "on_chain_sum_y": "20131208414109309246682633810972191434760704097299095122642286577906064855673",
+      "expected_sum_x": "12578891003341067378014308702289711395120884802528411605273861857727153951964",
+      "expected_sum_y": "20131208414109309246682633810972191434760704097299095122642286577906064855673",
+      "homomorphism_ok": true
+    },
+    "step4_admin_reset": {
+      "commitment_after_reset_x": "0",
+      "commitment_after_reset_y": "1",
+      "reset_to_identity": true,
+      "tx_hashes": {
+        "flow": "3be2a36f0bf0dca53ea42243762b8b5e07a7409f88f4e2b2a8dc012ac9c8175f",
+        "evm": "0x9b71c6ed57e8bccfb7def924518c16441f2cabf7b1b84e4dbbd5c7f5bd588c07"
+      }
+    }
+  },
+  "verdict": "PARTIAL",
+  "summary": {
+    "step1_wrap_delta_ok": false,
+    "step1_commitment_matches_tx_commit": false,
+    "step1_amount_disclose_proof_ok": true,
+    "step2_agg_verifier_offchain_ok": true,
+    "step2_agg_verifier_onchain_ok": true,
+    "step3_homomorphism_ok": true,
+    "step4_admin_reset_ok": true
+  },
+  "failure_analysis": {
+    "step1_wrap_root_cause": "KNOWN ARCHITECTURAL GAP — not a 2-gen Pedersen regression",
+    "detail": "The Cadence wrap tx (97e05966...) sealed with execution:Failure. Inner EVM call reverted inside COA.call. The on-chain AmountDiscloseVerifier (0xD0ED39..., v0.3 ceremony, windowed-Pedersen Pedersen(192)) rejected the amount-disclose proof. This is a pre-existing incompatibility: the v0.7.0 stack reuses the v0.3 AmountDiscloseVerifier while shieldedTransfer uses the new 2-gen Pedersen scheme. A unified AmountDisclose circuit that proves a 2-gen commitment (instead of windowed-Pedersen) is required to close this gap.",
+    "what_passed": [
+      "ConfidentialTransferAggregateVerifier: real Groth16 proof verified on-chain (step 2)",
+      "Pedersen2Gen.addCommits: on-chain homomorphism confirmed (step 3)",
+      "adminResetSlot: EVM state cleared to identity (step 4)",
+      "All 27 hardhat unit tests pass (aggregate-pedersen, homomorphism-onchain, janus-flow-aggregate)"
+    ],
+    "what_failed": [
+      "wrap() on testnet: AmountDiscloseVerifier rejection — environmental/circuit gap, not a Pedersen upgrade bug"
+    ],
+    "next_step": "Build AmountDisclose v2 circuit proving 2-gen commitment Commit(v,r)=[v]G+[r]H instead of windowed-Pedersen. New zkey + new AmountDiscloseVerifier contract + new JanusFlow wrap() deployment required before full round-trip testnet smoke can PASS."
+  }
+}
