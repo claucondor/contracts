@@ -4,7 +4,7 @@
  * Integration test: JanusFlow with 2-gen Pedersen aggregate commitment.
  *
  * Scenario (the v0.6 "C_old mismatch" operator scenario, now fixed):
- *   1. Alice wraps 10 FLOW (gets commitment Commit(10e18, r1))
+ *   1. Alice wrapWithProof 10 FLOW (gets commitment Commit(10e18, r1))
  *   2. Bob shieldedTransfers 0.5 FLOW to Alice via _testReceive sim
  *   3. Carol shieldedTransfers 0.5 FLOW to Alice via _testReceive sim
  *   4. Alice's accumulator = Commit(11e18, r1+r2+r3) — 3 accumulated events
@@ -12,7 +12,7 @@
  *   6. Alice's new commitment = Commit(6e18, new_r)
  *   7. Dave's commitment += Commit(5e18, tx_r)
  *
- * The AmountDiscloseVerifier is mocked (returns true) so wrap succeeds
+ * The AmountDiscloseVerifier is mocked (returns true) so wrapWithProof succeeds
  * without generating an amount-disclose proof. The transfer proof is real.
  */
 
@@ -99,18 +99,21 @@ describe("JanusFlow aggregate commitment: wrap → receive × 2 → shieldedTran
     expect(cy).to.equal(1n, "initial y should be 1 (identity)");
   });
 
-  it("Step 1: Alice wraps 10 FLOW — commitment accumulates correctly", async function () {
+  it("Step 1: Alice wrapWithProof 10 FLOW — commitment accumulates correctly", async function () {
     const wrapCommit = commit(WRAP_V, WRAP_R);
 
-    // mock proof (all zeros — MockAmountDiscloseVerifier accepts it)
-    const fakeAmountProof = [0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n];
+    // mock proof (all zeros — MockAmountDiscloseVerifier accepts any proof)
+    const fakePa  = [0n, 0n];
+    const fakePb  = [[0n, 0n], [0n, 0n]];
+    const fakePc  = [0n, 0n];
+    const nonce1  = 1n;
 
-    await janusFlow.connect(alice).wrap(
+    await janusFlow.connect(alice).wrapWithProof(
+      nonce1,
       [wrapCommit.x, wrapCommit.y],
-      fakeAmountProof,
-      "0x", // encryptedSnapshot
-      0n,   // ephPubkeyX
-      0n,   // ephPubkeyY
+      fakePa,
+      fakePb,
+      fakePc,
       { value: WRAP_V }
     );
 
@@ -123,23 +126,20 @@ describe("JanusFlow aggregate commitment: wrap → receive × 2 → shieldedTran
     expect(cy).to.equal(expected.y, "Alice commit.y after wrap");
   });
 
-  it("Step 2: _testReceive — simulate Bob sending 0.5 FLOW to Alice", async function () {
-    // Skip: JanusFlow does not have _testReceive (that was the mock).
-    // Instead we directly use shieldedTransfer to simulate receiving.
-    // For this test step we use the contract's _acceptShieldedCredit indirectly
-    // by having the contract owner call adminResetSlot... no, that resets.
-    //
-    // The cleanest approach: we test the accumulator directly via the wrap path
-    // (multiple wraps) since _testReceive only exists on MockAggregateToken.
-    // JanusFlow.wrap is the correct production accumulation path.
-    //
-    // Simulate "receive" by doing a second wrap from Alice for 0.5 FLOW with Bob's blinding:
+  it("Step 2: simulate receiving 0.5 FLOW (Bob's contribution, accumulated via wrapWithProof)", async function () {
+    // Simulate "receive" by doing a second wrapWithProof from Alice for 0.5 FLOW with Bob's blinding.
+    // In production, receives arrive via shieldedTransfer from Bob; here we use wrapWithProof
+    // to accumulate the same commitment point into Alice's slot, which exercises the same
+    // on-chain accumulator path (addCommits) without requiring a real transfer proof from Bob.
     const bobTxCommit = commit(HALF_FLOW, BOB_TX_R);
-    const fakeAmountProof = [0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n];
-    await janusFlow.connect(alice).wrap(
+    const fakePa  = [0n, 0n];
+    const fakePb  = [[0n, 0n], [0n, 0n]];
+    const fakePc  = [0n, 0n];
+    const nonce2  = 2n;
+    await janusFlow.connect(alice).wrapWithProof(
+      nonce2,
       [bobTxCommit.x, bobTxCommit.y],
-      fakeAmountProof,
-      "0x", 0n, 0n,
+      fakePa, fakePb, fakePc,
       { value: HALF_FLOW }
     );
 
@@ -152,13 +152,16 @@ describe("JanusFlow aggregate commitment: wrap → receive × 2 → shieldedTran
     expect(cy).to.equal(expected.y, "Alice commit.y after Bob receive");
   });
 
-  it("Step 3: _testReceive — simulate Carol sending 0.5 FLOW to Alice", async function () {
+  it("Step 3: simulate receiving 0.5 FLOW (Carol's contribution, accumulated via wrapWithProof)", async function () {
     const carolTxCommit = commit(HALF_FLOW, CAROL_TX_R);
-    const fakeAmountProof = [0n, 0n, 0n, 0n, 0n, 0n, 0n, 0n];
-    await janusFlow.connect(alice).wrap(
+    const fakePa  = [0n, 0n];
+    const fakePb  = [[0n, 0n], [0n, 0n]];
+    const fakePc  = [0n, 0n];
+    const nonce3  = 3n;
+    await janusFlow.connect(alice).wrapWithProof(
+      nonce3,
       [carolTxCommit.x, carolTxCommit.y],
-      fakeAmountProof,
-      "0x", 0n, 0n,
+      fakePa, fakePb, fakePc,
       { value: HALF_FLOW }
     );
 

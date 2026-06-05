@@ -1,14 +1,15 @@
 /**
  * proofGen.js — ZK proof generation helper for aggregate-pedersen tests
  *
- * Wraps snarkjs groth16.fullProve to generate proofs for
- * ConfidentialTransferAggregate witnesses.
+ * Wraps snarkjs groth16.fullProve to generate proofs for:
+ *   - ConfidentialTransferAggregate witnesses (generateProof)
+ *   - AmountDiscloseAggregate witnesses (generateAmountDiscloseProof)
  */
 
 const snarkjs = require("snarkjs");
 const path = require("path");
 
-// Paths to circuit artifacts (test zkey — single-contributor)
+// Paths to transfer circuit artifacts (test zkey — single-contributor)
 const WASM_PATH = path.join(
   __dirname,
   "../../../../..",
@@ -18,6 +19,18 @@ const ZKEY_PATH = path.join(
   __dirname,
   "../../../../..",
   "circuits/aggregate-ceremony/setup/confidential_transfer_aggregate_test.zkey"
+);
+
+// Paths to amount-disclose circuit artifacts (test zkey — single-contributor)
+const AMT_WASM_PATH = path.join(
+  __dirname,
+  "../../../../..",
+  "circuits/aggregate-ceremony/build/amount_disclose_aggregate_js/amount_disclose_aggregate.wasm"
+);
+const AMT_ZKEY_PATH = path.join(
+  __dirname,
+  "../../../../..",
+  "circuits/aggregate-ceremony/setup/amount_disclose_aggregate_test.zkey"
 );
 
 /** BabyJubJub prime-order subgroup order */
@@ -114,4 +127,48 @@ async function generateProof(input) {
   };
 }
 
-module.exports = { commit, addCommits, generateProof, SUBORDER, P, GX, GY, HX, HY };
+/**
+ * generateAmountDiscloseProof — generate a proof for the AmountDiscloseAggregate circuit.
+ *
+ * Circuit public inputs (order fixed): [amount, commitX, commitY, nonce]
+ * Private input: blinding
+ *
+ * @param {Object} input
+ * @param {bigint} input.amount   - wrap amount (== msg.value for JanusFlow)
+ * @param {bigint} input.blinding - 252-bit blinding scalar
+ * @param {bigint} input.nonce    - anti-replay nonce
+ * @returns {Object} { pA, pB, pC, pubSignals }
+ *   pubSignals[0] = amount
+ *   pubSignals[1] = commitX
+ *   pubSignals[2] = commitY
+ *   pubSignals[3] = nonce
+ */
+async function generateAmountDiscloseProof(input) {
+  const c = commit(input.amount, input.blinding);
+
+  const circuitInput = {
+    amount:   input.amount.toString(),
+    commitX:  c.x.toString(),
+    commitY:  c.y.toString(),
+    nonce:    input.nonce.toString(),
+    blinding: input.blinding.toString(),
+  };
+
+  const { proof, publicSignals } = await snarkjs.groth16.fullProve(
+    circuitInput,
+    AMT_WASM_PATH,
+    AMT_ZKEY_PATH
+  );
+
+  return {
+    pA: [BigInt(proof.pi_a[0]), BigInt(proof.pi_a[1])],
+    pB: [
+      [BigInt(proof.pi_b[0][1]), BigInt(proof.pi_b[0][0])],
+      [BigInt(proof.pi_b[1][1]), BigInt(proof.pi_b[1][0])],
+    ],
+    pC: [BigInt(proof.pi_c[0]), BigInt(proof.pi_c[1])],
+    pubSignals: publicSignals.map(BigInt),
+  };
+}
+
+module.exports = { commit, addCommits, generateProof, generateAmountDiscloseProof, SUBORDER, P, GX, GY, HX, HY };
