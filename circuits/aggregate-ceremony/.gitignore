@@ -1,0 +1,5 @@
+# This directory overrides root .gitignore for ceremony artifacts
+# build/ and setup/ contain small circuit artifacts that ARE committed
+# *.ptau is the only binary we exclude (large, shared SRS)
+*.ptau
+node_modules/

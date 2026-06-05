@@ -1,12 +1,15 @@
-// unwrap_ft.cdc — Unwrap JanusFT commitment back to FungibleToken.
+// unwrap_ft.cdc — Unwrap JanusFT commitment back to FungibleToken (v0.7 aggregate).
 //
 // LEAK BY DESIGN: `claimedAmount` is a cleartext UFix64 arg (boundary event).
-// The Groth16 amount-disclose proof binds `txCommit` to `claimedAmount` (gross).
-// Fee is deducted server-side; recipient receives net = claimedAmount - fee.
+// The AmountDiscloseAggregate proof binds txCommit to claimedAmount.
+// nonce = 0 is used for the amount-disclose proof on unwrap; anti-replay
+// is enforced by the transfer-proof's C_old state-machine check.
 //
 // Two Groth16 proofs are required:
-//   1. amountProof   — amount_disclose circuit: binds txCommit to claimedAmount
-//   2. transferProof — ConfidentialTransfer circuit: proves C_old → C_new is valid
+//   1. amountProof   — AmountDiscloseAggregate circuit (4 public inputs):
+//                        [claimedAmount_uint256, txCommit.x, txCommit.y, 0]
+//   2. transferProof — ConfidentialTransferAggregate circuit (6 public inputs):
+//                        [C_old.x, C_old.y, C_tx.x, C_tx.y, C_new.x, C_new.y]
 //
 // Both verified cross-VM. Atomic: if either reverts, no state changes.
 //
@@ -16,13 +19,13 @@
 //   recipient             Cadence address to receive NET tokens
 //   txCommitX/Y           Pedersen(claimedAmount, blinding) coordinates
 //   amountProof           [UInt256; 8] Groth16 amount-disclose proof
-//   amountPublicInputs    [UInt256; 3] amount_disclose public signals
+//   amountPublicInputs    [UInt256; 4] amount_disclose public signals (nonce=0)
 //   transferProof         [UInt256; 8] Groth16 confidential-transfer proof
 //   transferPublicInputs  [UInt256; 6] [C_old, C_tx, C_new] coordinates
 //   encryptedSnapshot     [UInt8] AES-GCM snapshot of residual balance
 //   ephPubX/Y             Sender's ephemeral BabyJub pubkey for snapshot ECDH
 
-import JanusFT from 0x7599043aea001283
+import JanusFT from 0xc4e8f99915893a2f
 import MockFT from 0x7599043aea001283
 import FungibleToken from 0x9a0766d93b6608b7
 import EVM from 0x8c5303eaa26202d6

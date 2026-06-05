@@ -1,0 +1,9 @@
+{
+  "name": "@claucondor/aggregate-ceremony",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Groth16 trusted-setup artifacts for the 2-generator Pedersen aggregate commitment circuit",
+  "dependencies": {
+    "circomlib": "^2.0.5"
+  }
+}

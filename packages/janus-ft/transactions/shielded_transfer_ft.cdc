@@ -8,17 +8,20 @@
 // amount — only commitment coords and encrypted blobs. Observers cannot determine
 // the transfer amount from the event alone.
 //
+// Uses the ConfidentialTransferAggregateVerifier (v0.7 aggregate scheme).
+// Public input shape is unchanged from v0.6: 6 UInt256 signals.
+//
 // Args:
 //   fromAccount           Sender's Cadence address
 //   toAccount             Recipient's Cadence address
-//   transferProof         [UInt256; 8] Groth16 confidential-transfer proof
+//   transferProof         [UInt256; 8] Groth16 confidential-transfer-aggregate proof
 //   publicInputs          [UInt256; 6] [C_old.x, C_old.y, C_tx.x, C_tx.y, C_new.x, C_new.y]
 //   encryptedSnapshotFrom [UInt8] AES-GCM snapshot for sender's new balance
 //   ephPubFromX/Y         Sender's ephemeral BabyJub pubkey for snapshot ECDH
 //   encryptedNoteTo       [UInt8] AES-GCM note for recipient
 //   ephPubToX/Y           Sender's ephemeral BabyJub pubkey for recipient note ECDH
 
-import JanusFT from 0x7599043aea001283
+import JanusFT from 0xc4e8f99915893a2f
 import EVM from 0x8c5303eaa26202d6
 
 transaction(

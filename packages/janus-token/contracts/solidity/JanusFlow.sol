@@ -2,8 +2,8 @@
 // EXPERIMENTAL — NOT AUDITED — DO NOT USE FOR PRODUCTION
 //
 // JanusFlow.sol — Native-FLOW confidential token.
-// Inherits JanusToken (abstract base).  MemoKey stored in shared MemoKeyRegistry.
-// MemoKey reads delegated to the shared MemoKeyRegistry (slot 90).
+// Inherits JanusToken (abstract base, v0.7.0).
+// Uses 2-generator Pedersen aggregate commitment for homomorphic accumulation.
 
 pragma solidity ^0.8.20;
 
@@ -12,10 +12,10 @@ import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.s
 
 contract JanusFlow is JanusToken {
     uint256 public constant MAX_WRAP = type(uint128).max;
-    string  public constant VERSION  = "0.6.3";
+    string  public constant VERSION  = "0.7.0";
 
     // -----------------------------------------------------------------------
-    // Initializer — for new proxies (not called on UUPS upgrade path)
+    // Initializer — for new proxies
     // -----------------------------------------------------------------------
 
     function initialize(
@@ -23,26 +23,62 @@ contract JanusFlow is JanusToken {
         address _transferVerifier,
         address _amountDiscloseVerifier,
         address _owner,
-        address _memoRegistry
+        address _memoRegistry,
+        address _pedersen2Gen
     ) external initializer {
         __JanusToken_init(
-            _babyJub, _transferVerifier, _amountDiscloseVerifier, _owner, _memoRegistry
+            _babyJub,
+            _transferVerifier,
+            _amountDiscloseVerifier,
+            _owner,
+            _memoRegistry,
+            _pedersen2Gen
         );
     }
 
     // -----------------------------------------------------------------------
-    // Public wrap — PAYABLE (msg.value carries the GROSS FLOW amount)
+    // Public wrapWithProof — PAYABLE (msg.value carries the GROSS FLOW amount)
+    //
+    // Requires a Groth16 proof from the AmountDiscloseAggregate circuit proving:
+    //   Commit(amount, blinding) = (commitX, commitY)
+    // where amount == msg.value (after any fee deduction: net amount).
+    //
+    // Public input layout: [amount, commitX, commitY, nonce]
+    //   - amount:  net wrap amount in attoFLOW (must equal msg.value after fee)
+    //   - commit:  the Pedersen commitment point being credited to the caller
+    //   - nonce:   caller-chosen unique anti-replay value
+    //
+    // @param nonce     Anti-replay nonce. Must be unused for msg.sender.
+    // @param commit    [commitX, commitY] — Pedersen commitment for this wrap.
+    // @param pA        Groth16 proof element A.
+    // @param pB        Groth16 proof element B.
+    // @param pC        Groth16 proof element C.
     // -----------------------------------------------------------------------
 
-    function wrap(
-        uint256[2] calldata txCommit,
-        uint256[8] calldata amountProof,
+    /// @notice Wrap native FLOW into a shielded commitment with anti-replay proof.
+    /// @param nonce             Anti-replay nonce. Must be unused for msg.sender.
+    /// @param commit            [commitX, commitY] — Pedersen commitment for this wrap.
+    /// @param pA                Groth16 proof element A.
+    /// @param pB                Groth16 proof element B.
+    /// @param pC                Groth16 proof element C.
+    /// @param encryptedSnapshot ECIES-encrypted snapshot of (value, blinding) for state recovery.
+    /// @param ephPubkeyX        Ephemeral public key X coordinate used in ECIES encryption.
+    /// @param ephPubkeyY        Ephemeral public key Y coordinate used in ECIES encryption.
+    function wrapWithProof(
+        uint256 nonce,
+        uint256[2] calldata commit,
+        uint256[2] calldata pA,
+        uint256[2][2] calldata pB,
+        uint256[2] calldata pC,
         bytes calldata encryptedSnapshot,
         uint256 ephPubkeyX,
         uint256 ephPubkeyY
     ) external payable {
         require(msg.value > 0, "JanusFlow: zero wrap");
         _recordFirstSnapshot(msg.sender);
+
+        require(!usedNonces[msg.sender][nonce], "JanusFlow: nonce used");
+        usedNonces[msg.sender][nonce] = true;
 
         (uint256 fee, uint256 net) = _calcFee(msg.value);
 
@@ -52,9 +88,53 @@ contract JanusFlow is JanusToken {
             emit FeeCollected(msg.sender, fee, "wrap");
         }
 
-        _wrap(net, txCommit, amountProof);
+        // Build flat proof array for internal helper
+        uint256[8] memory proofArr = [pA[0], pA[1], pB[0][0], pB[0][1], pB[1][0], pB[1][1], pC[0], pC[1]];
+        uint256[2] memory commitMem = [commit[0], commit[1]];
+
+        _wrapWithProofInternal(net, commitMem, proofArr, nonce);
 
         emit WrapWithSnapshot(msg.sender, net, encryptedSnapshot, ephPubkeyX, ephPubkeyY);
+    }
+
+    /// @dev Internal implementation called after nonce/fee checks.
+    function _wrapWithProofInternal(
+        uint256 amount,
+        uint256[2] memory txCommit,
+        uint256[8] memory amountProof,
+        uint256 nonce
+    ) internal {
+        require(amount > 0,         "JanusFlow: zero net wrap");
+        require(amount <= MAX_WRAP, "JanusFlow: exceeds MAX_WRAP");
+
+        // Verify the amount-disclose proof: proves commit = [amount]G + [blinding]H
+        require(
+            amountDiscloseVerifier.verifyProof(
+                [amountProof[0], amountProof[1]],
+                [[amountProof[2], amountProof[3]], [amountProof[4], amountProof[5]]],
+                [amountProof[6], amountProof[7]],
+                [amount, txCommit[0], txCommit[1], nonce]
+            ),
+            "JanusFlow: invalid amount_disclose proof"
+        );
+
+        // Accumulate commitment into caller's shielded balance
+        Point memory current = _effectiveCommitment(msg.sender);
+        (uint256 nx, uint256 ny) = pedersen2Gen.addCommits(
+            current.x, current.y,
+            txCommit[0], txCommit[1]
+        );
+        commitments[msg.sender] = Point({ x: nx, y: ny });
+
+        (uint256 sx, uint256 sy) = pedersen2Gen.addCommits(
+            totalSupplyCommitment.x, totalSupplyCommitment.y,
+            txCommit[0], txCommit[1]
+        );
+        totalSupplyCommitment = Point({ x: sx, y: sy });
+
+        totalLocked += amount;
+
+        emit Wrapped(msg.sender, amount);
     }
 
     // -----------------------------------------------------------------------
@@ -81,23 +161,16 @@ contract JanusFlow is JanusToken {
     // Template-method overrides
     // -----------------------------------------------------------------------
 
+    /// @dev _wrap is not called directly by any public function in this contract.
+    /// wrapWithProof() handles the full wrap path including proof verification.
+    /// This override is required by the abstract base; it reverts if called.
     function _wrap(
-        uint256 amount,
-        uint256[2] calldata txCommit,
-        uint256[8] calldata amountProof
-    ) internal override {
-        require(amount > 0,         "JanusFlow: zero net wrap");
-        require(amount <= MAX_WRAP, "JanusFlow: exceeds MAX_WRAP");
-
-        require(
-            _verifyAmountDisclose(amount, txCommit, amountProof),
-            "JanusFlow: invalid amount_disclose proof"
-        );
-
-        _acceptShieldedCredit(msg.sender, txCommit);
-        totalLocked += amount;
-
-        emit Wrapped(msg.sender, amount);
+        uint256,
+        uint256[2] calldata,
+        uint256[8] calldata,
+        uint256
+    ) internal pure override {
+        revert("JanusFlow: use wrapWithProof");
     }
 
     function _unwrap(
@@ -112,8 +185,10 @@ contract JanusFlow is JanusToken {
         require(recipient != address(0),      "JanusFlow: zero recipient");
         require(totalLocked >= claimedAmount, "JanusFlow: pool exhausted");
 
+        // For unwrap, nonce is 0 — the transfer proof already provides replay
+        // protection via the commitment state machine (C_old must match on-chain state).
         require(
-            _verifyAmountDisclose(claimedAmount, txCommit, amountProof),
+            _verifyAmountDisclose(claimedAmount, txCommit, amountProof, 0),
             "JanusFlow: invalid amount_disclose proof"
         );
 
@@ -154,7 +229,7 @@ contract JanusFlow is JanusToken {
     }
 
     receive() external payable {
-        revert("JanusFlow: bare FLOW deposit disabled - use wrap()");
+        revert("JanusFlow: bare FLOW deposit disabled - use wrapWithProof()");
     }
 }
 

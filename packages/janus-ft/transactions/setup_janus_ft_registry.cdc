@@ -1,7 +1,6 @@
-// setup_janus_ft_registry.cdc — Post-upgrade initialization for JanusFT v0.6.
+// setup_janus_ft_registry.cdc — Post-deploy initialization for JanusFT v0.7.
 //
-// Run ONCE by the deployer account (0x7599043aea001283) after upgrading JanusFT
-// from the lab-spike stub to the production v0.6 implementation.
+// Run ONCE by the deployer account after deploying JanusFT to a new account.
 //
 // This transaction:
 //   1. Sets underlyingVaultTypeIdentifier to the testnet MockFT vault type.
@@ -10,13 +9,16 @@
 //   4. Publishes the CommitmentRegistryPublic capability.
 //   5. Initializes fees: feeBps, feeRecipient, feeReceiverPath.
 //
-// For testnet MockFT:
+// For testnet MockFT (deployed at 0x7599043aea001283):
 //   underlyingType  = "A.7599043aea001283.MockFT.Vault"
 //   feeBps          = 10  (0.1%)
-//   feeRecipient    = 0x7599043aea001283 (deployer)
+//   feeRecipient    = deployer address (v066-admin: 0xc4e8f99915893a2f)
 //   feeReceiverPath = /public/mockFTReceiver
+//
+// NOTE: The JanusFT contract address in the import must match the deployment target.
+// This template uses JanusFT at the canonical testnet address set in flow.json aliases.
 
-import JanusFT from 0x7599043aea001283
+import JanusFT from 0xc4e8f99915893a2f
 import MockFT from 0x7599043aea001283
 import FungibleToken from 0x9a0766d93b6608b7
 

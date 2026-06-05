@@ -3,7 +3,7 @@
 		"JanusFT": {
 			"source": "./contracts/cadence/JanusFT.cdc",
 			"aliases": {
-				"testnet": "3c601a443c81e6cd"
+				"testnet": "c4e8f99915893a2f"
 			}
 		}
 	},
@@ -70,6 +70,20 @@
 				"type": "file",
 				"location": "/home/oydual3/.flow/openjanus-flow.pkey"
 			}
+		},
+		"testnet-claucondor": {
+			"address": "7599043aea001283",
+			"key": {
+				"type": "file",
+				"location": "/home/oydual3/.flow/testnet-claucondor.pkey"
+			}
+		},
+		"v066-admin": {
+			"address": "c4e8f99915893a2f",
+			"key": {
+				"type": "file",
+				"location": "/home/oydual3/.flow/v066-admin.pkey"
+			}
 		}
 	},
 	"deployments": {
@@ -78,6 +92,9 @@
 				"JanusFT"
 			],
 			"openjanus-flow": [
+				"JanusFT"
+			],
+			"v066-admin": [
 				"JanusFT"
 			]
 		}

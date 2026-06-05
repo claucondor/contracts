@@ -1,46 +1,14 @@
 // SPDX-License-Identifier: MIT
 // EXPERIMENTAL — NOT AUDITED — DO NOT USE FOR PRODUCTION
 //
-// JanusERC20.sol — Confidential ERC20 wrapper (v0.5).
-// Inherits JanusToken v0.3 (abstract base).
+// JanusERC20.sol — Confidential ERC20 wrapper (v0.7.0).
+// Inherits JanusToken v0.7.0 (aggregate commitment upgrade).
 //
-// v0.5 adds the following over v0.4:
-//   - 9-arg shieldedTransfer (selector 0x6218f5d9) — required by openjanus-sdk v0.6.3+
-//   - 6-arg wrap with encryptedSnapshot (WrapWithSnapshot event)
-//   - 9-arg unwrap with encryptedSnapshot (UnwrapWithSnapshot event)
-//   - firstSnapshotBlock mapping (per-user first-appearance block)
-//   - feeRecipient / feeBps / fee infrastructure
-//   - memoRegistry reference (shared MemoKeyRegistry)
-//   - ShieldedTransferWithSnapshot / WrapWithSnapshot / UnwrapWithSnapshot events
-//   - adminResetSlot (testnet only — UUPS owner guard)
-//
-// STORAGE LAYOUT — CRITICAL FOR UUPS COMPATIBILITY
-// -------------------------------------------------
-// The live proxy was deployed with JanusToken v0.3:
-//
-//   slot  0   babyJub
-//   slot  1   transferVerifier
-//   slot  2   amountDiscloseVerifier
-//   slot  3   commitments      mapping(address => Point)
-//   slot  4   totalSupplyCommitment.x
-//   slot  5   totalSupplyCommitment.y
-//   slot  6   totalLocked
-//   slot  7..46  __gap[40]    (JanusToken v0.3 reserved — NOT reordered here)
-//
-// JanusERC20 (v0.4, deployed):
-//   slot 47   underlying       address
-//   slot 48..86  __gapJanusERC20[39]
-//
-// JanusERC20 (v0.5, this file — UUPS upgrade target):
-//   slot 47   underlying       address        UNCHANGED
-//   slot 48   firstSnapshotBlock  mapping     NEW (consumes gap[0])
-//   slot 49   feeRecipient     address        NEW (consumes gap[1])
-//   slot 50   feeBps           uint16         NEW (consumes gap[2] — own slot for clarity)
-//   slot 51   memoRegistry     address        NEW (consumes gap[3])
-//   slot 52..86  __gapERC20[35]               REDUCED from 39 to 35
-//
-// The old 3-arg shieldedTransfer (selector 0x5764e916) and old wrap(uint256,...) remain
-// accessible via inherited JanusToken v0.3 — no breaking change for legacy callers.
+// Changes from v0.5.0:
+//   - Uses 2-generator Pedersen commitment (pedersen2Gen.addCommits) for
+//     all accumulator updates — correct homomorphism after N deposits
+//   - Accepts pedersen2Gen address in initializer
+//   - VERSION bumped to 0.7.0
 
 pragma solidity ^0.8.20;
 
@@ -63,29 +31,29 @@ interface IMemoKeyRegistryV2 {
 
 contract JanusERC20 is JanusToken {
 
-    string  public constant VERSION  = "0.5.0";
+    string  public constant VERSION  = "0.7.0";
     uint256 public constant MAX_WRAP = 18_000_000_000_000_000_000;
 
     // -----------------------------------------------------------------------
-    // Storage — slots 47+ (JanusToken v0.3 uses slots 0-46)
+    // Storage — slots after JanusToken base
     // -----------------------------------------------------------------------
 
-    /// slot 47 — underlying ERC20 (EXISTING from v0.4 — must not move)
+    /// underlying ERC20 token
     address public underlying;
 
-    /// slot 48 — first block a user appeared in a snapshot event (NEW in v0.5)
+    /// first block a user appeared in a snapshot event
     mapping(address => uint256) public firstSnapshotBlock;
 
-    /// slot 49 — fee destination address (NEW in v0.5)
+    /// fee destination address
     address public feeRecipient;
 
-    /// slot 50 — fee basis points (100 = 1 %, max 100) (NEW in v0.5)
+    /// fee basis points (100 = 1%, max 100)
     uint16  public feeBps;
 
-    /// slot 51 — shared MemoKeyRegistry (NEW in v0.5)
+    /// shared MemoKeyRegistry
     IMemoKeyRegistryV2 public memoRegistry;
 
-    /// slots 52..86 — reserved for future state (35 remaining after 4 consumed)
+    /// reserved
     uint256[35] private __gapERC20;
 
     // -----------------------------------------------------------------------
@@ -137,7 +105,7 @@ contract JanusERC20 is JanusToken {
     );
 
     // -----------------------------------------------------------------------
-    // Initializer — for NEW proxies (not called on UUPS upgrade path)
+    // Initializer — for NEW proxies
     // -----------------------------------------------------------------------
 
     function initialize(
@@ -146,17 +114,18 @@ contract JanusERC20 is JanusToken {
         address _amountDiscloseVerifier,
         address _underlying,
         address _owner,
-        address _memoRegistry
+        address _memoRegistry,
+        address _pedersen2Gen
     ) external initializer {
         require(_underlying   != address(0), "JanusERC20: zero underlying");
         require(_memoRegistry != address(0), "JanusERC20: zero memoRegistry");
-        __JanusToken_init(_babyJub, _transferVerifier, _amountDiscloseVerifier, _owner);
+        __JanusToken_init(_babyJub, _transferVerifier, _amountDiscloseVerifier, _owner, _pedersen2Gen);
         underlying   = _underlying;
         memoRegistry = IMemoKeyRegistryV2(_memoRegistry);
     }
 
     // -----------------------------------------------------------------------
-    // Admin — post-upgrade setters (owner-only)
+    // Admin — post-deploy setters (owner-only)
     // -----------------------------------------------------------------------
 
     function setMemoRegistry(address _registry) external onlyOwner {
@@ -216,15 +185,45 @@ contract JanusERC20 is JanusToken {
     }
 
     // -----------------------------------------------------------------------
-    // Public wrap — v0.6.3 signature with encryptedSnapshot (NEW SELECTOR)
+    // Public wrapWithProof
     //
-    // SDK calls: wrap(uint256,uint256[2],uint256[8],bytes,uint256,uint256)
+    // Requires a Groth16 proof from the AmountDiscloseAggregate circuit proving:
+    //   Commit(amount, blinding) = (commitX, commitY)
+    // where amount is the net token amount after any fee deduction.
+    //
+    // Public input layout: [amount, commitX, commitY, nonce]
+    //   - amount:  net wrap amount (ERC20 token units, after fee deduction)
+    //   - commit:  the Pedersen commitment point being credited to the caller
+    //   - nonce:   caller-chosen unique anti-replay value
+    //
+    // The ERC20 amount comes from a function parameter (not msg.value).
+    // transferFrom pulls tokens from the caller first, then proof is verified.
+    //
+    // @param amount  Gross ERC20 token amount to wrap (transferFrom pulls this).
+    // @param nonce   Anti-replay nonce. Must be unused for msg.sender.
+    // @param commit  [commitX, commitY] — Pedersen commitment for the net amount.
+    // @param pA      Groth16 proof element A.
+    // @param pB      Groth16 proof element B.
+    // @param pC      Groth16 proof element C.
     // -----------------------------------------------------------------------
 
-    function wrap(
+    /// @notice Wrap ERC20 tokens into a shielded commitment with anti-replay proof.
+    /// @param amount            Gross ERC20 token amount to wrap (transferFrom pulls this).
+    /// @param nonce             Anti-replay nonce. Must be unused for msg.sender.
+    /// @param commit            [commitX, commitY] — Pedersen commitment for the net amount.
+    /// @param pA                Groth16 proof element A.
+    /// @param pB                Groth16 proof element B.
+    /// @param pC                Groth16 proof element C.
+    /// @param encryptedSnapshot ECIES-encrypted snapshot of (value, blinding) for state recovery.
+    /// @param ephPubkeyX        Ephemeral public key X coordinate used in ECIES encryption.
+    /// @param ephPubkeyY        Ephemeral public key Y coordinate used in ECIES encryption.
+    function wrapWithProof(
         uint256 amount,
-        uint256[2] calldata txCommit,
-        uint256[8] calldata amountProof,
+        uint256 nonce,
+        uint256[2] calldata commit,
+        uint256[2] calldata pA,
+        uint256[2][2] calldata pB,
+        uint256[2] calldata pC,
         bytes calldata encryptedSnapshot,
         uint256 ephPubkeyX,
         uint256 ephPubkeyY
@@ -232,6 +231,10 @@ contract JanusERC20 is JanusToken {
         require(amount > 0, "JanusERC20: zero wrap");
         _recordFirstSnapshot(msg.sender);
 
+        require(!usedNonces[msg.sender][nonce], "JanusERC20: nonce used");
+        usedNonces[msg.sender][nonce] = true;
+
+        // Pull gross amount from caller
         bool okPull = IERC20(underlying).transferFrom(msg.sender, address(this), amount);
         require(okPull, "JanusERC20: transferFrom failed");
 
@@ -243,15 +246,42 @@ contract JanusERC20 is JanusToken {
             emit FeeCollected(msg.sender, fee, "wrap");
         }
 
-        _wrap(net, txCommit, amountProof);
+        require(net > 0,         "JanusERC20: zero net wrap");
+        require(net <= MAX_WRAP, "JanusERC20: exceeds MAX_WRAP");
 
+        // Verify the amount-disclose proof: proves commit = [net]G + [blinding]H
+        require(
+            amountDiscloseVerifier.verifyProof(
+                [pA[0], pA[1]],
+                [[pB[0][0], pB[0][1]], [pB[1][0], pB[1][1]]],
+                [pC[0], pC[1]],
+                [net, commit[0], commit[1], nonce]
+            ),
+            "JanusERC20: invalid amount_disclose proof"
+        );
+
+        // Accumulate commitment into caller's shielded balance
+        Point memory current = _effectiveCommitment(msg.sender);
+        (uint256 nx, uint256 ny) = pedersen2Gen.addCommits(
+            current.x, current.y,
+            commit[0], commit[1]
+        );
+        commitments[msg.sender] = Point({ x: nx, y: ny });
+
+        (uint256 sx, uint256 sy) = pedersen2Gen.addCommits(
+            totalSupplyCommitment.x, totalSupplyCommitment.y,
+            commit[0], commit[1]
+        );
+        totalSupplyCommitment = Point({ x: sx, y: sy });
+
+        totalLocked += net;
+
+        emit Wrapped(msg.sender, net);
         emit WrapWithSnapshot(msg.sender, net, encryptedSnapshot, ephPubkeyX, ephPubkeyY);
     }
 
     // -----------------------------------------------------------------------
-    // Public unwrap — v0.6.3 signature with encryptedSnapshot (NEW SELECTOR)
-    //
-    // SDK calls: unwrap(uint256,address,uint256[2],uint256[8],uint256[6],uint256[8],bytes,uint256,uint256)
+    // Public unwrap
     // -----------------------------------------------------------------------
 
     function unwrap(
@@ -271,9 +301,7 @@ contract JanusERC20 is JanusToken {
     }
 
     // -----------------------------------------------------------------------
-    // 9-arg shieldedTransfer — v0.6.3 signature (NEW SELECTOR 0x6218f5d9)
-    //
-    // SDK calls: shieldedTransfer(address,uint256[6],uint256[8],bytes,uint256,uint256,bytes,uint256,uint256)
+    // 9-arg shieldedTransfer (SDK v0.6.3+ compatible selector 0x6218f5d9)
     // -----------------------------------------------------------------------
 
     function shieldedTransfer(
@@ -304,10 +332,12 @@ contract JanusERC20 is JanusToken {
             "JanusERC20: invalid transfer proof"
         );
 
+        // Sender: set new_commit
         commitments[msg.sender] = Point({ x: publicInputs[4], y: publicInputs[5] });
 
+        // Recipient: accumulate transfer_commit homomorphically
         Point memory recvCommit = _effectiveCommitment(to);
-        (uint256 rx, uint256 ry) = babyJub.babyAdd(
+        (uint256 rx, uint256 ry) = pedersen2Gen.addCommits(
             recvCommit.x, recvCommit.y,
             publicInputs[2], publicInputs[3]
         );
@@ -325,23 +355,16 @@ contract JanusERC20 is JanusToken {
     // Template-method overrides
     // -----------------------------------------------------------------------
 
+    /// @dev _wrap is not called by any public function in this contract.
+    /// wrapWithProof() handles the full wrap path directly.
+    /// This override satisfies the abstract base requirement; it reverts if called.
     function _wrap(
-        uint256 amount,
-        uint256[2] calldata txCommit,
-        uint256[8] calldata amountProof
-    ) internal override {
-        require(amount > 0,         "JanusERC20: zero net wrap");
-        require(amount <= MAX_WRAP, "JanusERC20: exceeds MAX_WRAP");
-
-        require(
-            _verifyAmountDisclose(amount, txCommit, amountProof),
-            "JanusERC20: invalid amount_disclose proof"
-        );
-
-        _acceptShieldedCredit(msg.sender, txCommit);
-        totalLocked += amount;
-
-        emit Wrapped(msg.sender, amount);
+        uint256,
+        uint256[2] calldata,
+        uint256[8] calldata,
+        uint256
+    ) internal pure override {
+        revert("JanusERC20: use wrapWithProof");
     }
 
     function _unwrap(
@@ -356,8 +379,10 @@ contract JanusERC20 is JanusToken {
         require(recipient != address(0),      "JanusERC20: zero recipient");
         require(totalLocked >= claimedAmount, "JanusERC20: pool exhausted");
 
+        // For unwrap, nonce is 0 — the transfer proof provides replay protection
+        // via the commitment state machine (C_old must match on-chain state).
         require(
-            _verifyAmountDisclose(claimedAmount, txCommit, amountProof),
+            _verifyAmountDisclose(claimedAmount, txCommit, amountProof, 0),
             "JanusERC20: invalid amount_disclose proof"
         );
 

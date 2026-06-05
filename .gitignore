@@ -12,3 +12,5 @@ coverage/
 *.tgz
 .DS_Store
 Thumbs.db
+# ZK ceremony files — large binary, not committed
+*.ptau

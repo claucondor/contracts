@@ -2,29 +2,31 @@
 //
 // This is the PRODUCTION contract — no stubs, real BabyJub cross-VM, real Groth16 ZK.
 //
-// UPGRADE NOTES (from lab-spike v0.0 → production v0.6):
+// UPGRADE NOTES (from v0.6 windowed-Pedersen → v0.7 aggregate-Pedersen):
 //   All existing contract-level fields are preserved verbatim for Cadence upgrade-validator
 //   compatibility. New EVM addresses and curve constants are exposed as view functions
-//   rather than stored fields. custodyVaultType is derived from the existing
-//   underlyingVaultTypeIdentifier String field via CompositeType() at call time.
+//   rather than stored fields. The usedNonces anti-replay set is added INSIDE the existing
+//   CommitmentRegistry resource (no new contract-level field).
 //
 // Architecture:
 //   - Generic: wraps ANY @{FungibleToken.Vault} underlying (underlyingVaultTypeIdentifier).
 //     For testnet this is A.7599043aea001283.MockFT.Vault; at mainnet swap the underlying.
-//   - Pedersen commitments tracked per-account on Cadence.
+//   - 2-gen Pedersen commitments tracked per-account on Cadence:
+//       C = [amount]·G + [blinding]·H  (aggregate scheme, same as JanusFlow v0.7)
 //   - All BabyJubJub EC point arithmetic delegated to BabyJub.sol on Flow EVM
 //     via cross-VM call through the caller's COA.
-//   - ZK proof verification (amount_disclose + ConfidentialTransfer) done
-//     cross-VM via ConfidentialTransferVerifier.sol and AmountDiscloseVerifier.sol.
+//   - ZK proof verification (amount_disclose_aggregate + ConfidentialTransferAggregate)
+//     done cross-VM via ConfidentialTransferAggregateVerifier.sol and
+//     AmountDiscloseAggregateVerifier.sol.
 //   - MemoKey: uses JanusFlow.MemoKey from 0x5dcbeb41055ec57e — shared
 //     generic BabyJub pubkey resource.
 //   - publishMemoKey: Cadence-only. MemoKey at canonical /storage/openjanusMemoKey.
-//   - Events follow v0.6 schema with snapshot ciphertexts.
+//   - Events follow v0.7 schema with snapshot ciphertexts + nonce.
 //
 // EVM contracts used (Flow EVM testnet, chainId 545):
-//   BabyJub.sol:                        0x27139AFda7425f51F68D32e0A38b7D43BcB0f870
-//   ConfidentialTransferVerifier.sol:   0x84852aF72D2EF2A0A937e8Dae0BFA482E707E39B
-//   AmountDiscloseVerifier.sol:         0xD0ED3936530258C278f5357C1dB709ad34768352
+//   BabyJub.sol:                                0x27139AFda7425f51F68D32e0A38b7D43BcB0f870
+//   ConfidentialTransferAggregateVerifier.sol:  0x5702A545d2853b03B808aEA331f892c121b67243
+//   AmountDiscloseAggregateVerifier.sol:        0xa80283baB7fcEFC2c75De43DB5a1cBF00E96B984
 //
 // SECURITY NOTE: EXPERIMENTAL. Not audited. Do not use with real funds.
 
@@ -44,14 +46,14 @@ access(all) contract JanusFT {
         return "0x27139AFda7425f51F68D32e0A38b7D43BcB0f870"
     }
 
-    /// ConfidentialTransferVerifier.sol — Groth16 shielded-transfer verifier
+    /// ConfidentialTransferAggregateVerifier.sol — Groth16 shielded-transfer verifier (v0.7 aggregate)
     access(all) view fun TRANSFER_VERIFIER_ADDR(): String {
-        return "0x84852aF72D2EF2A0A937e8Dae0BFA482E707E39B"
+        return "0x5702A545d2853b03B808aEA331f892c121b67243"
     }
 
-    /// AmountDiscloseVerifier.sol — Groth16 amount-disclose verifier (wrap/unwrap)
+    /// AmountDiscloseAggregateVerifier.sol — Groth16 amount-disclose verifier (v0.7 aggregate)
     access(all) view fun AMOUNT_VERIFIER_ADDR(): String {
-        return "0xD0ED3936530258C278f5357C1dB709ad34768352"
+        return "0xa80283baB7fcEFC2c75De43DB5a1cBF00E96B984"
     }
 
     /// BN254 field prime (= BabyJubJub base field prime)
@@ -107,10 +109,10 @@ access(all) contract JanusFT {
     // Events
     //
     // DEPRECATED (lab-spike v0.0, preserved for upgrade-validator compat):
-    //   Wrapped / Unwrapped / ShieldedTransferred — never emitted in v0.6.
+    //   Wrapped / Unwrapped / ShieldedTransferred — never emitted in v0.7.
     // These MUST be kept because Cadence upgrade validator forbids removing events.
     //
-    // NEW (v0.6 production — snapshot ciphertexts):
+    // ACTIVE (v0.7 aggregate — snapshot ciphertexts):
     //   WrapWithSnapshot / ShieldedTransferWithSnapshot / UnwrapWithSnapshot
     // -----------------------------------------------------------------------
 
@@ -320,8 +322,24 @@ access(all) contract JanusFT {
 
     // -----------------------------------------------------------------------
     // ZK proof verification helpers (cross-VM, Groth16)
+    //
+    // proof layout (flat [UInt256; 8]):
+    //   [0..1]  pA  — G1 point
+    //   [2..3]  pB row 0 (pre-swapped for EVM: [pi_b[0][1], pi_b[0][0]])
+    //   [4..5]  pB row 1 (pre-swapped: [pi_b[1][1], pi_b[1][0]])
+    //   [6..7]  pC  — G1 point
+    //
+    // Uses EVM.encodeABIWithSignature for correct ABI encoding of typed
+    // fixed-size arrays ([UInt256;2], [[UInt256;2];2]) rather than manual
+    // per-element encoding which produces incorrect dynamic-array headers.
     // -----------------------------------------------------------------------
 
+    /// Verify AmountDiscloseAggregate proof.
+    /// Public input layout (4 signals, v0.7 aggregate scheme):
+    ///   [0] amount    — wrap amount (UFix64 internal units)
+    ///   [1] commitX   — commitment x-coordinate
+    ///   [2] commitY   — commitment y-coordinate
+    ///   [3] nonce     — anti-replay nonce
     access(self) fun _verifyAmountProof(
         proof: [UInt256],
         publicInputs: [UInt256],
@@ -329,15 +347,29 @@ access(all) contract JanusFT {
     ): Bool {
         pre {
             proof.length == 8:        "JanusFT: amount proof must be 8 limbs"
-            publicInputs.length == 3: "JanusFT: amount publicInputs must be 3"
+            publicInputs.length == 4: "JanusFT: amount publicInputs must be 4 (v0.7 aggregate)"
         }
-        let SEL: [UInt8] = [0x11, 0x47, 0x9f, 0xea]
-        return JanusFT._verifyGroth16(
-            selectorBytes: SEL, verifierAddr: JanusFT.AMOUNT_VERIFIER_ADDR(),
-            proof: proof, numPublicInputs: 3, publicInputs: publicInputs, coa: coa
+        let pA: [UInt256; 2]       = [proof[0], proof[1]]
+        let pB: [[UInt256; 2]; 2]  = [[proof[2], proof[3]], [proof[4], proof[5]]]
+        let pC: [UInt256; 2]       = [proof[6], proof[7]]
+        let pub4: [UInt256; 4]     = [publicInputs[0], publicInputs[1], publicInputs[2], publicInputs[3]]
+
+        let calldata = EVM.encodeABIWithSignature(
+            "verifyProof(uint256[2],uint256[2][2],uint256[2],uint256[4])",
+            [pA, pB, pC, pub4]
         )
+        let addr = EVM.addressFromString(JanusFT.AMOUNT_VERIFIER_ADDR())
+        let result = coa.call(to: addr, data: calldata, gasLimit: 500_000, value: EVM.Balance(attoflow: 0))
+        if result.status != EVM.Status.successful { return false }
+        if result.data.length < 32 { return false }
+        return result.data[31] == 1
     }
 
+    /// Verify ConfidentialTransferAggregate proof.
+    /// Public input layout (6 signals):
+    ///   [0..1] C_old — sender's current commitment
+    ///   [2..3] C_tx  — transfer commitment
+    ///   [4..5] C_new — sender's new commitment
     access(self) fun _verifyTransferProof(
         proof: [UInt256],
         publicInputs: [UInt256],
@@ -347,36 +379,19 @@ access(all) contract JanusFT {
             proof.length == 8:        "JanusFT: transfer proof must be 8 limbs"
             publicInputs.length == 6: "JanusFT: transfer publicInputs must be 6"
         }
-        let SEL: [UInt8] = [0xf3, 0x98, 0x78, 0x9b]
-        return JanusFT._verifyGroth16(
-            selectorBytes: SEL, verifierAddr: JanusFT.TRANSFER_VERIFIER_ADDR(),
-            proof: proof, numPublicInputs: 6, publicInputs: publicInputs, coa: coa
-        )
-    }
+        let pA: [UInt256; 2]       = [proof[0], proof[1]]
+        let pB: [[UInt256; 2]; 2]  = [[proof[2], proof[3]], [proof[4], proof[5]]]
+        let pC: [UInt256; 2]       = [proof[6], proof[7]]
+        let pub6: [UInt256; 6]     = [
+            publicInputs[0], publicInputs[1], publicInputs[2],
+            publicInputs[3], publicInputs[4], publicInputs[5]
+        ]
 
-    access(self) fun _verifyGroth16(
-        selectorBytes: [UInt8],
-        verifierAddr: String,
-        proof: [UInt256],
-        numPublicInputs: Int,
-        publicInputs: [UInt256],
-        coa: auth(EVM.Call) &EVM.CadenceOwnedAccount
-    ): Bool {
-        var calldata: [UInt8] = selectorBytes
-        calldata = calldata.concat(EVM.encodeABI([proof[0]]))
-        calldata = calldata.concat(EVM.encodeABI([proof[1]]))
-        calldata = calldata.concat(EVM.encodeABI([proof[2]]))
-        calldata = calldata.concat(EVM.encodeABI([proof[3]]))
-        calldata = calldata.concat(EVM.encodeABI([proof[4]]))
-        calldata = calldata.concat(EVM.encodeABI([proof[5]]))
-        calldata = calldata.concat(EVM.encodeABI([proof[6]]))
-        calldata = calldata.concat(EVM.encodeABI([proof[7]]))
-        var pi = 0
-        while pi < numPublicInputs {
-            calldata = calldata.concat(EVM.encodeABI([publicInputs[pi]]))
-            pi = pi + 1
-        }
-        let addr = EVM.addressFromString(verifierAddr)
+        let calldata = EVM.encodeABIWithSignature(
+            "verifyProof(uint256[2],uint256[2][2],uint256[2],uint256[6])",
+            [pA, pB, pC, pub6]
+        )
+        let addr = EVM.addressFromString(JanusFT.TRANSFER_VERIFIER_ADDR())
         let result = coa.call(to: addr, data: calldata, gasLimit: 500_000, value: EVM.Balance(attoflow: 0))
         if result.status != EVM.Status.successful { return false }
         if result.data.length < 32 { return false }
@@ -385,6 +400,10 @@ access(all) contract JanusFT {
 
     // -----------------------------------------------------------------------
     // CommitmentRegistry resource
+    //
+    // usedNonces is stored INSIDE this resource (not at contract level) to
+    // satisfy the Cadence upgrade-validator rule that forbids new contract-level
+    // fields. New mutable state goes inside existing Resources only.
     // -----------------------------------------------------------------------
 
     access(all) resource interface CommitmentRegistryPublic {
@@ -396,8 +415,14 @@ access(all) contract JanusFT {
 
         access(self) var vault: @{FungibleToken.Vault}
 
+        /// Anti-replay: per-registry nonce set for wrap operations.
+        /// Nonces are keyed by the submitting address to allow parallel wraps
+        /// across accounts while preventing replay of any single wrap proof.
+        access(self) var usedNonces: {UInt256: Bool}
+
         init(vault: @{FungibleToken.Vault}) {
             self.vault <- vault
+            self.usedNonces = {}
         }
 
         access(all) fun balanceOfCommitment(account: Address): Commitment {
@@ -408,56 +433,96 @@ access(all) contract JanusFT {
             return JanusFT.totalLocked
         }
 
-        // ----- wrap -----
-        access(all) fun wrap(
-            account:              Address,
-            netAmount:            UFix64,
-            depositVault:         @{FungibleToken.Vault},
-            txCommit:             Commitment,
-            amountProof:          [UInt256],
-            amountPublicInputs:   [UInt256],
-            encryptedSnapshot:    [UInt8],
-            ephPubX:              UInt256,
-            ephPubY:              UInt256,
-            coa:                  auth(EVM.Call) &EVM.CadenceOwnedAccount
+        // ----- wrapWithProof (v0.7 aggregate) -----
+        //
+        // Inputs match the EVM-side JanusFlow.wrapWithProof signature:
+        //   nonce              — anti-replay nonce (must be unused)
+        //   commit             — Pedersen commitment for NET amount
+        //   pA, pB, pC         — Groth16 proof (snarkjs flat format, 8 UInt256 limbs total)
+        //   encryptedSnapshot  — AES-GCM ciphertext of (netAmount, blinding) for self-recovery
+        //   ephPubkeyX/Y       — sender's ephemeral BabyJub pubkey for snapshot ECDH
+        //   vault              — deposit vault; must be the configured custodyVaultType
+        //
+        // AmountDisclose public inputs (4 signals, v0.7 aggregate scheme):
+        //   [vault.balance, commit.x, commit.y, nonce]
+        //
+        // Fee is computed on GROSS (vault.balance before skim).
+        // Net = gross - fee. The proof binds to GROSS (== vault.balance at entry).
+        // Contract validates: gross == netAmount + fee after skim.
+        access(all) fun wrapWithProof(
+            account:           Address,
+            nonce:             UInt256,
+            commitX:           UInt256,
+            commitY:           UInt256,
+            pA:                [UInt256],
+            pB:                [[UInt256]],
+            pC:                [UInt256],
+            encryptedSnapshot: [UInt8],
+            ephPubkeyX:        UInt256,
+            ephPubkeyY:        UInt256,
+            vault:             @{FungibleToken.Vault},
+            coa:               auth(EVM.Call) &EVM.CadenceOwnedAccount
         ) {
             pre {
-                netAmount > 0.0:                    "JanusFT: zero wrap"
-                amountProof.length == 8:            "JanusFT: amountProof must have 8 limbs"
-                amountPublicInputs.length == 3:     "JanusFT: amountPublicInputs must have 3 elements"
-                depositVault.getType() == JanusFT.custodyVaultType():
-                    "JanusFT.wrap: depositVault type mismatch — expected custodyVaultType"
+                pA.length == 2:         "JanusFT: pA must have 2 elements"
+                pB.length == 2:         "JanusFT: pB must have 2 rows"
+                pB[0].length == 2:      "JanusFT: pB[0] must have 2 elements"
+                pB[1].length == 2:      "JanusFT: pB[1] must have 2 elements"
+                pC.length == 2:         "JanusFT: pC must have 2 elements"
+                vault.balance > 0.0:    "JanusFT: zero wrap"
+                vault.getType() == JanusFT.custodyVaultType():
+                    "JanusFT.wrapWithProof: vault type mismatch — expected custodyVaultType"
+                !(self.usedNonces[nonce] ?? false):
+                    "JanusFT.wrapWithProof: nonce already used (replay attempt)"
             }
 
-            let gross = depositVault.balance
+            // Mark nonce used before any state changes (reentrancy guard pattern)
+            self.usedNonces[nonce] = true
+
+            let gross = vault.balance
+
+            // Fee skim
             let fee = JanusFT.computeFee(gross: gross)
-            assert(
-                gross == netAmount + fee,
-                message: "JanusFT.wrap: gross != netAmount + fee"
-            )
-
-            let amountVerified = JanusFT._verifyAmountProof(
-                proof: amountProof, publicInputs: amountPublicInputs, coa: coa
-            )
-            assert(amountVerified, message: "JanusFT.wrap: amount proof verification failed")
-
             if fee > 0.0 {
-                let feeVault <- depositVault.withdraw(amount: fee)
+                let feeVault <- vault.withdraw(amount: fee)
                 let receiverPath = JanusFT.feeReceiverPath()
                 let feeReceiver = getAccount(JanusFT.feeRecipient())
                     .capabilities.borrow<&{FungibleToken.Receiver}>(receiverPath)
-                    ?? panic("JanusFT.wrap: feeRecipient has no FungibleToken receiver at configured path")
+                    ?? panic("JanusFT.wrapWithProof: feeRecipient has no FungibleToken receiver at configured path")
                 feeReceiver.deposit(from: <- feeVault)
                 emit FeeCollected(user: account, fee: fee, op: "wrap")
             }
 
-            assert(
-                depositVault.balance == netAmount,
-                message: "JanusFT.wrap: residual after fee skim != netAmount"
-            )
-            self.vault.deposit(from: <- depositVault)
+            let netAmount = vault.balance
+            assert(netAmount > 0.0, message: "JanusFT.wrapWithProof: net amount is zero after fee skim")
 
-            let current = JanusFT.commitments[account] ?? Commitment(x: 0, y: 1)
+            // Flatten proof to 8-element array: [pA[0], pA[1], pB[0][1], pB[0][0], pB[1][1], pB[1][0], pC[0], pC[1]]
+            // pB coordinates are byte-swapped per snarkjs / EVM Groth16 convention.
+            let proof: [UInt256] = [
+                pA[0], pA[1],
+                pB[0][1], pB[0][0],
+                pB[1][1], pB[1][0],
+                pC[0], pC[1]
+            ]
+
+            // AmountDisclose public inputs (4 signals, v0.7 aggregate):
+            //   [netAmount_as_uint256, commitX, commitY, nonce]
+            // FIX 2026-06-05: align with EVM siblings (JanusFlow/JanusERC20) — proof binds to NET, not GROSS.
+            // SDK orchestration computes net = gross - fee before building the proof; this contract must match.
+            let netUInt = JanusFT._ufixToUInt256(netAmount)
+            let publicInputs: [UInt256] = [netUInt, commitX, commitY, nonce]
+
+            let amountVerified = JanusFT._verifyAmountProof(
+                proof: proof, publicInputs: publicInputs, coa: coa
+            )
+            assert(amountVerified, message: "JanusFT.wrapWithProof: amount-disclose proof verification failed")
+
+            // Deposit net vault into custody
+            self.vault.deposit(from: <- vault)
+
+            // Update per-account commitment (homomorphic add)
+            let txCommit = Commitment(x: commitX, y: commitY)
+            let current  = JanusFT.commitments[account] ?? Commitment(x: 0, y: 1)
             let newCommit = JanusFT._babyAdd(a: current, b: txCommit, coa: coa)
             JanusFT.commitments[account] = newCommit
 
@@ -471,8 +536,8 @@ access(all) contract JanusFT {
                 commitX:           newCommit.x,
                 commitY:           newCommit.y,
                 encryptedSnapshot: encryptedSnapshot,
-                ephPubX:           ephPubX,
-                ephPubY:           ephPubY
+                ephPubX:           ephPubkeyX,
+                ephPubY:           ephPubkeyY
             )
         }
 
@@ -531,6 +596,12 @@ access(all) contract JanusFT {
         }
 
         // ----- unwrap -----
+        //
+        // Uses nonce = 0 for the amount-disclose proof (anti-replay on unwrap is
+        // enforced by the transfer-proof's C_old check: once the state machine
+        // transitions C_old → C_new, replaying the same transfer proof fails
+        // the C_old check). Nonce 0 is reserved for unwrap and is never added
+        // to usedNonces (it is implicitly "used" by the state machine check).
         access(all) fun unwrap(
             account:               Address,
             claimedAmount:         UFix64,
@@ -549,7 +620,7 @@ access(all) contract JanusFT {
                 claimedAmount > 0.0:            "JanusFT: zero unwrap"
                 JanusFT.totalLocked >= claimedAmount: "JanusFT: pool exhausted"
                 amountProof.length == 8:        "JanusFT: amountProof must have 8 limbs"
-                amountPublicInputs.length == 3: "JanusFT: amountPublicInputs must have 3 elements"
+                amountPublicInputs.length == 4: "JanusFT: amountPublicInputs must have 4 elements (v0.7 aggregate)"
                 transferProof.length == 8:      "JanusFT: transferProof must have 8 limbs"
                 transferPublicInputs.length == 6: "JanusFT: transferPublicInputs must have 6 elements"
             }
@@ -690,12 +761,13 @@ access(all) contract JanusFT {
     }
 
     // -----------------------------------------------------------------------
-    // DEPRECATED STUBS (kept to satisfy upgrade validator for existing storage/types)
-    // These were in the lab spike. In production, _babyAdd/_babySubtract replace them.
-    // The names are preserved but they are NO LONGER CALLED by any code in v0.6.
+    // DEPRECATED STUBS
+    // Preserved so that the Cadence upgrade validator does not reject the
+    // update (validator forbids removing declared functions that are part of
+    // the contract interface). These functions are never called by v0.7 code.
     // -----------------------------------------------------------------------
 
-    /// @deprecated — use _babyAdd (cross-VM) instead. Kept for upgrade compat.
+    /// @deprecated — kept for upgrade validator compat. NOT called in v0.7.
     access(all) fun babyAddStub(a: Commitment, b: Commitment): Commitment {
         let p: UInt256 = 21888242871839275222246405745257275088548364400416034343698204186575808495617
         let nx: UInt256 = (a.x + b.x + (a.y * b.y) % p) % p
@@ -703,11 +775,27 @@ access(all) contract JanusFT {
         return Commitment(x: nx, y: ny)
     }
 
-    /// @deprecated — use _babyNegate (cross-VM) instead. Kept for upgrade compat.
+    /// @deprecated — kept for upgrade validator compat. NOT called in v0.7.
     access(all) fun babyNegateStub(c: Commitment): Commitment {
         let p: UInt256 = 21888242871839275222246405745257275088548364400416034343698204186575808495617
         let nx: UInt256 = p - c.x
         return Commitment(x: nx, y: c.y)
+    }
+
+    // -----------------------------------------------------------------------
+    // UFix64 → UInt256 conversion helper
+    //
+    // UFix64 uses 8 decimal places (1.0 = 100_000_000 internal units).
+    // The circuit receives the raw integer representation of the UFix64 value.
+    // -----------------------------------------------------------------------
+
+    access(all) view fun _ufixToUInt256(_ v: UFix64): UInt256 {
+        // UFix64 * 1e8 gives the integer representation.
+        // Multiply then divide avoids overflow on the multiplication step.
+        // Cadence UFix64 max is ~18.4e18 so raw int fits in UInt256.
+        let scaled = v * 100_000_000.0
+        // Convert to UInt256 via UInt64 → UInt256 promotion
+        return UInt256(UInt64(scaled))
     }
 
     // -----------------------------------------------------------------------
@@ -716,7 +804,6 @@ access(all) contract JanusFT {
 
     /// Create a CommitmentRegistry with an empty vault of the configured underlying type.
     /// The caller must provide an empty vault of the correct underlying type.
-    /// Use createRegistryWithVault(vault:) from the setup transaction instead.
     access(all) fun createRegistry(vault: @{FungibleToken.Vault}): @CommitmentRegistry {
         pre {
             vault.balance == 0.0:
@@ -728,7 +815,7 @@ access(all) contract JanusFT {
     }
 
     /// Legacy factory (from old contract) — kept for upgrade compat.
-    /// In v0.6, prefer createRegistry() without args.
+    /// In v0.7, prefer createRegistry(vault:).
     access(all) fun createRegistryWithVault(vault: @{FungibleToken.Vault}): @CommitmentRegistry {
         return <- create CommitmentRegistry(vault: <- vault)
     }

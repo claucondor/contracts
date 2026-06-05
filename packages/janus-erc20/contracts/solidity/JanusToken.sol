@@ -1,54 +1,37 @@
 // SPDX-License-Identifier: MIT
 // EXPERIMENTAL — NOT AUDITED — DO NOT USE FOR PRODUCTION
 //
-// JanusToken.sol — Abstract base for openjanus confidential tokens (v0.3).
+// JanusToken.sol — Abstract base for openjanus confidential tokens (v0.7.1).
 //
-// This is the *template* that defines the on-chain shape of every confidential
-// token in the openjanus stack:
+// v0.7.1 — amount-disclose aggregate verifier integration
 //
-//   - Hidden per-account balance commitments (BabyJubJub Pedersen).
-//   - Hidden total-supply commitment (homomorphic sum of per-account commits).
-//   - Cleartext aggregate custody accounting (`totalLocked`) — VISIBLE BY DESIGN
-//     so observers can audit the size of the shielded pool.
-//   - A shielded transfer that hides amount on all channels (calldata, events,
-//     storage) gated by a Groth16 ConfidentialTransfer proof.
-//   - Abstract `_wrap` / `_unwrap` template-method hooks that concrete tokens
-//     (e.g. JanusFlow for native FLOW) implement to plug in the underlying
-//     asset's custody logic.
+// Adds wrapWithProof() path: AmountDiscloseAggregateVerifier verifies that the
+// submitted Pedersen commitment encodes the wrap amount with a valid blinding
+// factor. Anti-replay via usedNonces[caller][nonce].
+// Public input layout: [amount, commitX, commitY, nonce]
 //
-// Concrete tokens MUST:
+// v0.7.0 — 2-generator Pedersen aggregate commitment upgrade
 //
-//   - Implement `_wrap(amount, txCommit, amountProof)` to take custody of
-//     `amount` of the underlying asset and bind it to `txCommit` via the
-//     AmountDiscloseVerifier.
-//   - Implement `_unwrap(claimedAmount, recipient, txCommit, amountProof,
-//     transferPublicInputs, transferProof)` to release `claimedAmount` of the
-//     underlying asset to `recipient` after verifying both proofs.
-//   - Call `_acceptShieldedCredit(account, txCommit)` from inside `_wrap` after
-//     verifying the amount-disclose proof and (optionally) updating custody.
-//   - Call `_processShieldedDebit(account, txCommit, transferPublicInputs)`
-//     from inside `_unwrap` after verifying both proofs.
+// Replaces windowed-Pedersen accumulation with the 2-generator Pedersen scheme:
 //
-// Cryptographic dependencies (deployed primitive addresses, set in `__JanusToken_init`):
+//   Commit(v, r) := [v]·G + [r]·H
 //
-//   - BabyJub.sol                  — twisted Edwards point arithmetic.
-//   - ConfidentialTransferVerifier — Groth16 verifier for the v2 transfer circuit.
-//   - AmountDiscloseVerifier       — Groth16 verifier binding a Pedersen commit
-//                                    to a PUBLIC scalar amount.
+// This is homomorphic: Commit(v1,r1) + Commit(v2,r2) = Commit(v1+v2, r1+r2)
+// so the on-chain accumulator correctly tracks accumulated deposits after N wraps.
 //
-// Storage layout:
+// Storage layout (fresh-deploy, UUPS compatible within this deploy):
 //
-//   slot 0 .. 49 (UUPS + Ownable) — managed by OpenZeppelin upgradeable mixins.
-//   slot 50      — IBabyJub babyJub
-//   slot 51      — IConfidentialTransferVerifier transferVerifier
-//   slot 52      — IAmountDiscloseVerifier        amountDiscloseVerifier
-//   slot 53..    — mapping(address => Point) commitments
-//                 Point totalSupplyCommitment
-//                 uint256 totalLocked
-//   slot N + __gap[40]  — reserved for future state.
-//
-// Concrete subclasses MUST NOT reorder existing storage or remove __gap entries
-// without coordinating a synchronized storage migration.
+//   slot 0 .. 49 (UUPS + Ownable)
+//   slot 50   babyJub               (retained for negate() in debit path)
+//   slot 51   transferVerifier
+//   slot 52   amountDiscloseVerifier
+//   slot 53   commitments           mapping(address => Point)
+//   slot 54   totalSupplyCommitment.x
+//   slot 55   totalSupplyCommitment.y
+//   slot 56   totalLocked
+//   slot 57   pedersen2Gen          address  <-- NEW in v0.7.0
+//   slot 58..97  __gap[40]          reserved
+//   slot 98   usedNonces            mapping(address => mapping(uint256 => bool))  <-- NEW in v0.7.1
 
 pragma solidity ^0.8.20;
 
@@ -57,7 +40,7 @@ import {OwnableUpgradeable}   from "@openzeppelin/contracts-upgradeable/access/O
 import {Initializable}        from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 // ---------------------------------------------------------------------------
-// External verifier / curve interfaces (shape pinned by the lab deployments)
+// External verifier / curve interfaces
 // ---------------------------------------------------------------------------
 
 interface IBabyJub {
@@ -78,17 +61,27 @@ interface IConfidentialTransferVerifier {
     ) external view returns (bool);
 }
 
+/// @dev AmountDiscloseAggregateVerifier — 4 public inputs: [amount, commitX, commitY, nonce]
 interface IAmountDiscloseVerifier {
     function verifyProof(
         uint[2] calldata _pA,
         uint[2][2] calldata _pB,
         uint[2] calldata _pC,
-        uint[3] calldata _pubSignals
+        uint[4] calldata _pubSignals
     ) external view returns (bool);
 }
 
+interface IPedersen2Gen {
+    function addCommits(
+        uint256 x1, uint256 y1,
+        uint256 x2, uint256 y2
+    ) external view returns (uint256 rx, uint256 ry);
+
+    function isOnCurve(uint256 x, uint256 y) external pure returns (bool);
+}
+
 // ---------------------------------------------------------------------------
-// JanusToken — abstract base
+// JanusToken — abstract base (v0.7.0, aggregate commitment upgrade)
 // ---------------------------------------------------------------------------
 
 abstract contract JanusToken is
@@ -106,44 +99,35 @@ abstract contract JanusToken is
     }
 
     // -----------------------------------------------------------------------
-    // Storage — see file-header note about slot stability
+    // Storage
     // -----------------------------------------------------------------------
 
     IBabyJub                       public babyJub;
     IConfidentialTransferVerifier  public transferVerifier;
     IAmountDiscloseVerifier        public amountDiscloseVerifier;
 
-    /// Hidden per-account balance commitment (BabyJubJub point). Identity
-    /// element (0, 1) means zero balance; uninitialised storage (0, 0) is
-    /// treated as identity by `_effectiveCommitment`.
     mapping(address => Point) public commitments;
 
-    /// Homomorphic sum of all `commitments[account]` — invariant:
-    /// `totalSupplyCommitment == sum(commitments[a] for all a)`.
     Point public totalSupplyCommitment;
 
-    /// Aggregate cleartext custody pool. Tracks the underlying asset locked
-    /// in the contract across all users. VISIBLE BY DESIGN — boundary
-    /// accounting that an external observer can audit at any time.
     uint256 public totalLocked;
 
-    /// Reserved storage for future state vars. Decrement when adding fields
-    /// to keep layout stable across upgrades.
+    /// 2-generator Pedersen commitment library — homomorphic accumulator.
+    IPedersen2Gen    public pedersen2Gen;
+
+    /// Reserved storage for future state vars.
     uint256[40] private __gap;
+
+    /// Anti-replay nonces for wrapWithProof.
+    /// usedNonces[caller][nonce] = true after the nonce has been consumed.
+    mapping(address => mapping(uint256 => bool)) public usedNonces;
 
     // -----------------------------------------------------------------------
     // Events
     // -----------------------------------------------------------------------
 
-    /// VISIBLE BY DESIGN — boundary leak: discloses the wrap amount.
     event Wrapped(address indexed user, uint256 amount);
-
-    /// VISIBLE BY DESIGN — boundary leak: discloses the unwrap amount and
-    /// recipient.
     event Unwrapped(address indexed user, address indexed recipient, uint256 amount);
-
-    /// HIDDEN — emits no amount data, matching the ERC-7984 confidential
-    /// transfer event.
     event ConfidentialTransfer(address indexed from, address indexed to);
 
     // -----------------------------------------------------------------------
@@ -155,18 +139,18 @@ abstract contract JanusToken is
         _disableInitializers();
     }
 
-    /// @notice One-shot initializer for the abstract base.
-    /// Concrete tokens MUST call this from their own `initialize`.
     function __JanusToken_init(
         address _babyJub,
         address _transferVerifier,
         address _amountDiscloseVerifier,
-        address _owner
+        address _owner,
+        address _pedersen2Gen
     ) internal onlyInitializing {
         require(_babyJub                != address(0), "JanusToken: zero babyJub");
         require(_transferVerifier       != address(0), "JanusToken: zero transferVerifier");
         require(_amountDiscloseVerifier != address(0), "JanusToken: zero amountDiscloseVerifier");
         require(_owner                  != address(0), "JanusToken: zero owner");
+        require(_pedersen2Gen           != address(0), "JanusToken: zero pedersen2Gen");
 
         __Ownable_init(_owner);
         __UUPSUpgradeable_init();
@@ -174,12 +158,23 @@ abstract contract JanusToken is
         babyJub                = IBabyJub(_babyJub);
         transferVerifier       = IConfidentialTransferVerifier(_transferVerifier);
         amountDiscloseVerifier = IAmountDiscloseVerifier(_amountDiscloseVerifier);
+        pedersen2Gen           = IPedersen2Gen(_pedersen2Gen);
 
         totalSupplyCommitment = Point({ x: 0, y: 1 });
     }
 
-    /// @dev UUPS upgrade authorization — owner only.
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
+
+    // -----------------------------------------------------------------------
+    // Verifier admin
+    // -----------------------------------------------------------------------
+
+    /// @notice Update the AmountDiscloseVerifier address. Owner-only.
+    /// Used after UUPS upgrades to point to the latest verifier contract.
+    function setAmountDiscloseVerifier(address _verifier) external onlyOwner {
+        require(_verifier != address(0), "JanusToken: zero amountDiscloseVerifier");
+        amountDiscloseVerifier = IAmountDiscloseVerifier(_verifier);
+    }
 
     // -----------------------------------------------------------------------
     // View helpers
@@ -194,6 +189,7 @@ abstract contract JanusToken is
         return (p.x, p.y);
     }
 
+    /// @dev Converts uninitialised storage (0, 0) to BabyJubJub identity (0, 1).
     function _effectiveCommitment(address account) internal view returns (Point memory) {
         Point memory c = commitments[account];
         if (c.x == 0 && c.y == 0) {
@@ -203,14 +199,9 @@ abstract contract JanusToken is
     }
 
     // -----------------------------------------------------------------------
-    // shieldedTransfer — concrete; amount HIDDEN on calldata, events, storage
+    // shieldedTransfer — 3-arg base version (overridden by JanusERC20 9-arg)
     // -----------------------------------------------------------------------
 
-    /// @notice Move a hidden amount from `msg.sender` to `to`.
-    /// @dev    Public inputs layout (uint256[6]):
-    ///         [0..1] C_old   — sender's current commitment (must match storage)
-    ///         [2..3] C_tx    — Pedersen commit of the transferred amount
-    ///         [4..5] C_new   — sender's new commitment (C_old − C_tx)
     function shieldedTransfer(
         address to,
         uint256[6] calldata publicInputs,
@@ -230,12 +221,12 @@ abstract contract JanusToken is
             "JanusToken: invalid transfer proof"
         );
 
-        // Sender commitment becomes C_new
+        // Sender: set new_commit
         commitments[msg.sender] = Point({ x: publicInputs[4], y: publicInputs[5] });
 
-        // Recipient commitment += C_tx (homomorphic)
+        // Recipient: accumulate transfer_commit homomorphically
         Point memory recvCommit = _effectiveCommitment(to);
-        (uint256 rx, uint256 ry) = babyJub.babyAdd(
+        (uint256 rx, uint256 ry) = pedersen2Gen.addCommits(
             recvCommit.x, recvCommit.y,
             publicInputs[2], publicInputs[3]
         );
@@ -245,19 +236,14 @@ abstract contract JanusToken is
     }
 
     // -----------------------------------------------------------------------
-    // Abstract template-method hooks for wrap/unwrap
-    //
-    // Concrete tokens override these to take/release custody of the
-    // underlying asset (native FLOW, ERC-20, etc.). The shielded credit /
-    // debit accounting is provided by `_acceptShieldedCredit` and
-    // `_processShieldedDebit` below — concrete impls call them once they
-    // have verified the relevant proofs.
+    // Abstract template-method hooks
     // -----------------------------------------------------------------------
 
     function _wrap(
         uint256 amount,
         uint256[2] calldata txCommit,
-        uint256[8] calldata amountProof
+        uint256[8] calldata amountProof,
+        uint256 nonce
     ) internal virtual;
 
     function _unwrap(
@@ -270,19 +256,22 @@ abstract contract JanusToken is
     ) internal virtual;
 
     // -----------------------------------------------------------------------
-    // Internal helpers — proof verification + commitment book-keeping
+    // Internal helpers
     // -----------------------------------------------------------------------
 
+    /// @dev Verify an amount-disclose proof with nonce binding.
+    /// Public input layout: [amount, commitX, commitY, nonce]
     function _verifyAmountDisclose(
         uint256 claimedAmount,
         uint256[2] calldata commit,
-        uint256[8] calldata proof
+        uint256[8] calldata proof,
+        uint256 nonce
     ) internal view returns (bool) {
         return amountDiscloseVerifier.verifyProof(
             [proof[0], proof[1]],
             [[proof[2], proof[3]], [proof[4], proof[5]]],
             [proof[6], proof[7]],
-            [claimedAmount, commit[0], commit[1]]
+            [claimedAmount, commit[0], commit[1], nonce]
         );
     }
 
@@ -298,46 +287,37 @@ abstract contract JanusToken is
         );
     }
 
-    /// @dev Credit `account` with the commitment `txCommit` after an
-    /// `_wrap` flow has verified the amount-disclose proof. Updates the
-    /// per-account commitment AND the total-supply commitment homomorphically.
+    /// @dev Accumulate txCommit into account's shielded balance (homomorphic).
     function _acceptShieldedCredit(
         address account,
         uint256[2] calldata txCommit
     ) internal {
         Point memory current = _effectiveCommitment(account);
-        (uint256 nx, uint256 ny) = babyJub.babyAdd(
+        (uint256 nx, uint256 ny) = pedersen2Gen.addCommits(
             current.x, current.y,
             txCommit[0], txCommit[1]
         );
         commitments[account] = Point({ x: nx, y: ny });
 
-        (uint256 sx, uint256 sy) = babyJub.babyAdd(
+        (uint256 sx, uint256 sy) = pedersen2Gen.addCommits(
             totalSupplyCommitment.x, totalSupplyCommitment.y,
             txCommit[0], txCommit[1]
         );
         totalSupplyCommitment = Point({ x: sx, y: sy });
     }
 
-    /// @dev Debit `account` of the commitment encoded by the verified
-    /// transfer-proof bundle. Caller MUST have already verified the
-    /// AmountDisclose proof, the transfer proof, AND the consistency
-    /// invariants between them (`C_old == account's commitment`,
-    /// `C_tx == txCommit`).
     function _processShieldedDebit(
         address account,
         uint256[2] calldata txCommit,
         uint256[6] calldata transferPublicInputs
     ) internal {
-        // Account → C_new
         commitments[account] = Point({
             x: transferPublicInputs[4],
             y: transferPublicInputs[5]
         });
 
-        // totalSupplyCommitment -= txCommit  (== add the negation)
         (uint256 negX, uint256 negY) = babyJub.negate(txCommit[0], txCommit[1]);
-        (uint256 sx, uint256 sy) = babyJub.babyAdd(
+        (uint256 sx, uint256 sy) = pedersen2Gen.addCommits(
             totalSupplyCommitment.x, totalSupplyCommitment.y,
             negX, negY
         );
