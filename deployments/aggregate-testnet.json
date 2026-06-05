@@ -21,8 +21,8 @@
     "MemoKeyRegistry": "0x05D104962ff087441f26BA11A1E1C3b9E091D663",
     "MockUSDC": "0x686E8d90A7B608540cAF46E527fD8a5631A1b658",
     "AmountDiscloseAggregateVerifier": "0xa80283baB7fcEFC2c75De43DB5a1cBF00E96B984",
-    "JanusFlow_impl_aggregate": "0x4D8f10B2f7CFdc0ef662f664fFd2fe8d671596db",
-    "JanusERC20_impl_aggregate": "0x73e2C552aADaaB673CB7620b6B2317487cf54B99"
+    "JanusFlow_impl_aggregate": "0xE9770039f240E4fdD6Ac82B5F72c6013A4FeEc46",
+    "JanusERC20_impl_aggregate": "0x4d3c4c4c04E48fcd341FB065c17788BAb4D50d8b"
   },
   "contract_status": {
     "Pedersen2Gen_library": "NEW (stateless, reusable, homomorphic point operations)",
@@ -36,8 +36,8 @@
     "MemoKeyRegistry": "REUSED (shared registry — unaffected by stack change)",
     "MockUSDC": "REUSED (testnet underlying token)",
     "AmountDiscloseAggregateVerifier": "NEW (test zkey — single-contributor, testnet only; 6,163 constraints)",
-    "JanusFlow_impl_aggregate": "NEW (wrapWithProof + anti-replay usedNonces, paired with AmountDiscloseAggregateVerifier)",
-    "JanusERC20_impl_aggregate": "NEW (wrapWithProof + anti-replay usedNonces, paired with AmountDiscloseAggregateVerifier)"
+    "JanusFlow_impl_aggregate": "UPGRADED — snapshot-aware wrapWithProof (emits encryptedSnapshot + ephPubkey)",
+    "JanusERC20_impl_aggregate": "UPGRADED — snapshot-aware wrapWithProof (emits encryptedSnapshot + ephPubkey)"
   },
   "tx_hashes": {
     "pedersen2gen_deploy": "e8bdb405db8b36ad930ff596761d1c5130093b272771ad18847b57b1e752c60f",
@@ -52,7 +52,15 @@
     "januserc20_impl_aggregate_deploy": "f5c5365311f61754f2dfeaa94f1256655259c6afaf397ecf37130a060e48cc6d",
     "januserc20_upgrade": "1a3ed4eeacaec48fcf97155b0a2d1d2f23d17920c9e53ad35c775388761f1813",
     "janusflow_set_adv": "01bf13dde8cdd442590e13a999473c4fd4b1820377db84dd643e1830f790a5bc",
-    "januserc20_set_adv": "6e79ca3eec063ee10fe45fddc82968f7db888ec9dfb14a794487bf3e758504f1"
+    "januserc20_set_adv": "6e79ca3eec063ee10fe45fddc82968f7db888ec9dfb14a794487bf3e758504f1",
+    "janusflow_impl_snapshot_deploy": "242f4b72076d0a50d0a97b5408f937ded827eea724d3d6a8485d83599936ab09",
+    "januserc20_impl_snapshot_deploy": "39edcb8497cef43110ea209b4f03304db3f84fb5e8ac1544c5483dd118e89899",
+    "janusflow_upgrade_snapshot": "e45d6f7744ed51eec8d092d5b71930816bf0e3f89a1e8aa869f130f113260fbb",
+    "januserc20_upgrade_snapshot": "6499872d65cc620bfafbf998352fc1a3500476be4d796260c1deaab09b8bc8bc",
+    "janusflow_impl_snapshot_deploy_evm": "0x59e07857bb1694b4eea3174964889870d9551c6d7a7c0e68d3b5f896549a969f",
+    "janusflow_upgrade_snapshot_evm": "0xdb3e13a451a11c8040d7829221a8fdc97f1013ac634dc804ea239fd728e29526",
+    "januserc20_impl_snapshot_deploy_evm": "0xadafa5f1fd7f9cf40a8bc8359e247140d9a4f0ea75a5c08306dcab05cd3a7049",
+    "januserc20_upgrade_snapshot_evm": "0xf3f35841261096641734006fd5989032e6fa509757c4864915e36dc7bb013cbd"
   },
   "post_deploy_checks": {
     "janusflow": {
