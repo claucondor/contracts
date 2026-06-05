@@ -18,7 +18,7 @@
 //   memoPubX  BabyJub pubkey X coordinate (UInt256)
 //   memoPubY  BabyJub pubkey Y coordinate (UInt256)
 
-import JanusFT from 0x7599043aea001283
+import JanusFT from 0xc4e8f99915893a2f
 import JanusFlow from 0x5dcbeb41055ec57e
 import EVM from 0x8c5303eaa26202d6
 
