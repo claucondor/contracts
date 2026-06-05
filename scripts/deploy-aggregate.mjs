@@ -69,19 +69,6 @@ const PKEY_PATH        = "/home/oydual3/.flow/v066-admin.pkey";
 const RPC_URL = "https://testnet.evm.nodes.onflow.org";
 const CHAIN_ID = 545;
 
-// ── Flow JSON config ──────────────────────────────────────────────────────────
-const flowJsonConfig = {
-    networks: { testnet: "access.devnet.nodes.onflow.org:9000" },
-    accounts: {
-        [FLOW_SIGNER]: {
-            address: ADMIN_CADENCE,
-            key: { type: "file", location: PKEY_PATH },
-        },
-    },
-    contracts: {},
-    deployments: {},
-};
-
 // ── Cadence deploy transaction ────────────────────────────────────────────────
 const DEPLOY_TX_TEMPLATE = `import "EVM"
 
@@ -106,7 +93,22 @@ transaction(bytecodeHex: String) {
 `;
 
 function ensureFlowJson() {
-    writeFileSync(FLOW_JSON, JSON.stringify(flowJsonConfig, null, 2));
+    // Base on janus-token flow.json for EVM dependency, strip Cadence contracts/deployments
+    // (they are relative paths that break when CLI runs from /tmp).
+    const base = JSON.parse(readFileSync(join(JANUS_TOKEN_PKG, "flow.json"), "utf8"));
+    const cleaned = {
+        networks: base.networks,
+        dependencies: base.dependencies,
+        accounts: {
+            [FLOW_SIGNER]: {
+                address: ADMIN_CADENCE,
+                key: { type: "file", location: PKEY_PATH },
+            },
+        },
+        contracts: {},
+        deployments: {},
+    };
+    writeFileSync(FLOW_JSON, JSON.stringify(cleaned, null, 2));
 }
 
 function runFlowDeploy(bytecodeHex, label) {
