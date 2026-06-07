@@ -169,6 +169,12 @@ access(all) contract JanusFT {
         pubkeyY:  UInt256
     )
 
+    /// Emitted on the FIRST interaction of an account with JanusFT (wrap or shieldedTransfer).
+    /// Off-chain SDK uses this to determine the earliest block to scan for an account's
+    /// snapshots, replacing the DEFAULT_LOOKBACK window heuristic.
+    /// Mirrors _recordFirstSnapshot(account) from JanusToken.sol on the EVM side.
+    access(all) event FirstSnapshot(account: Address, block: UInt64)
+
     // -----------------------------------------------------------------------
     // Fee events
     // -----------------------------------------------------------------------
@@ -522,6 +528,7 @@ access(all) contract JanusFT {
 
             // Update per-account commitment (homomorphic add)
             let txCommit = Commitment(x: commitX, y: commitY)
+            let wasFresh: Bool = (JanusFT.commitments[account] == nil)
             let current  = JanusFT.commitments[account] ?? Commitment(x: 0, y: 1)
             let newCommit = JanusFT._babyAdd(a: current, b: txCommit, coa: coa)
             JanusFT.commitments[account] = newCommit
@@ -530,6 +537,10 @@ access(all) contract JanusFT {
                 a: JanusFT.totalSupplyCommitment, b: txCommit, coa: coa
             )
             JanusFT.totalLocked = JanusFT.totalLocked + netAmount
+
+            if wasFresh {
+                emit FirstSnapshot(account: account, block: getCurrentBlock().height)
+            }
 
             emit WrapWithSnapshot(
                 account:           account,
@@ -567,6 +578,11 @@ access(all) contract JanusFT {
                 message: "JanusFT.shieldedTransfer: C_old mismatch"
             )
 
+            // Capture freshness BEFORE any state writes (sender always has a commitment
+            // if they pass C_old check, but recipient may be nil on first receive)
+            let senderWasFresh: Bool = (JanusFT.commitments[fromAccount] == nil)
+            let recipientWasFresh: Bool = (JanusFT.commitments[toAccount] == nil)
+
             let transferVerified = JanusFT._verifyTransferProof(
                 proof: transferProof, publicInputs: publicInputs, coa: coa
             )
@@ -580,6 +596,13 @@ access(all) contract JanusFT {
             let recipientCurrent = JanusFT.commitments[toAccount] ?? Commitment(x: 0, y: 1)
             let newRecipient = JanusFT._babyAdd(a: recipientCurrent, b: txCommit, coa: coa)
             JanusFT.commitments[toAccount] = newRecipient
+
+            if senderWasFresh {
+                emit FirstSnapshot(account: fromAccount, block: getCurrentBlock().height)
+            }
+            if recipientWasFresh {
+                emit FirstSnapshot(account: toAccount, block: getCurrentBlock().height)
+            }
 
             emit ShieldedTransferWithSnapshot(
                 fromCommitX:           newSender.x,

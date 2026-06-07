@@ -320,7 +320,11 @@ async function main() {
 
     const wrapBlinding = BigInt("0x" + Array.from(crypto.getRandomValues(new Uint8Array(16)))
         .map(b => b.toString(16).padStart(2, "0")).join(""));
-    const wrapNonce = 1n;
+    // Use a random nonce (128-bit) to avoid replay on repeated smoke runs.
+    // The nonce is a public input to the amount-disclose circuit, so it must
+    // be chosen BEFORE proof generation — the proof binds to this value.
+    const wrapNonce = BigInt("0x" + Array.from(crypto.getRandomValues(new Uint8Array(16)))
+        .map(b => b.toString(16).padStart(2, "0")).join(""));
 
     const wrapCommit = commit2gen(WRAP_AMOUNT, wrapBlinding);
     console.log(`  blinding:       ${wrapBlinding}`);
