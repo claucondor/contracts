@@ -1,0 +1,82 @@
+{
+  "version": "0.8.0",
+  "date": "2026-06-09",
+  "snarkjs_version": "0.7.6",
+  "production_ready": false,
+  "grade": "pre-mainnet",
+  "grade_notes": "Hermez phase 1 (54+ contributors, pot22) + 1 named phase 2 contributor + Flow VRF beacon. For mainnet, recommend adding a 2nd independent contributor from outside the openjanus team.",
+  "circuit": "confidential_claim_batch.circom",
+  "constraints": 270325,
+  "curve": "bn128",
+  "protocol": "groth16",
+  "circuit_hash": "a8ac5d34 a613b237 cbe66c0e 1fd894c0 e786e517 c3acd563 9590a0ad 16bb0dde 731f33f3 18dc9503 c0eec6ca 6813cfb7 5d1fd6e9 4c51584e a41b85a5 65ab67af",
+  "r1cs_sha256": "ce75b9650e1aec06de0f5f3fc688e2fe8775726221529308fa9f9be6363fed93",
+  "ptau": {
+    "file": "pot22.ptau",
+    "source": "https://storage.googleapis.com/zkevm/ptau/powersOfTau28_hez_final_22.ptau",
+    "size_bytes": 4831921304,
+    "sha256": "68a21bef870d5d4a9de39c8f35ebcf04e18ef97e14b2cd3f4c3e39876821d362",
+    "power": 22,
+    "max_constraints_capacity": 4194304,
+    "note": "Hermez powersOfTau28_hez_final_22 — 54+ contributors, multi-party phase 1. Our circuit (270,325 constraints) uses ~6.4% of pot22 capacity."
+  },
+  "initial_zkey": {
+    "file": "cb_0000.zkey",
+    "sha256": "8272b8c6641efedcc5468a1d4d9967a0ff3c6a16740801ea1ebccd3fe59d2a8b"
+  },
+  "contributors": [
+    {
+      "index": 1,
+      "name": "openjanus-batch-claim-contributor-1",
+      "type": "individual",
+      "entropy_source": "64 bytes from openssl rand -hex 64 (process-local, not logged)",
+      "zkey_after": "cb_0001.zkey",
+      "zkey_after_sha256": "f67f540126229eab57fd61e66edabd326706d59795418384abe749ec494633f7",
+      "contribution_hash": "4b9b094e 15cda4bf 2824dae3 9c668773 f5b71f5b ba8ad977 0575c38d 4a6e7aec bb51a3f8 11d0cf43 40a3555e a76e219f 98ea2e93 a2f31edd 441ce253 a3837c54"
+    },
+    {
+      "index": 2,
+      "name": "Flow VRF Block 325996533",
+      "type": "beacon",
+      "beacon_hex": "e75b8dc6800a3ebe84958d6fb6632945aecbefe0e38dad05bca96d62dc29ee12",
+      "beacon_height": 325996533,
+      "beacon_source": "https://rest-testnet.onflow.org/v1/blocks?height=sealed",
+      "beacon_network": "flow-testnet",
+      "iterations_exp": 10,
+      "zkey_after": "cb_final.zkey",
+      "zkey_after_sha256": "a5ed2189f2313796d9e38367ca7459966d9db083498b22a0e38ed2b548d2dde1",
+      "contribution_hash": "066367c8 20823236 63aafdea 37439ab5 5e81b11c d7ce710b d6529c17 c86f420e d6e26ba6 82e6d6f8 96e76bfe 98f71ebb a04681d2 2baea569 81b6f1ad ae4d06e7",
+      "verification": "curl -s https://rest-testnet.onflow.org/v1/blocks/e75b8dc6800a3ebe84958d6fb6632945aecbefe0e38dad05bca96d62dc29ee12 | python3 -c \"import json,sys; b=json.load(sys.stdin); print(b['header']['height'], b['header']['id'])\""
+    }
+  ],
+  "final_zkey": {
+    "file": "cb_final.zkey",
+    "sha256": "a5ed2189f2313796d9e38367ca7459966d9db083498b22a0e38ed2b548d2dde1",
+    "size_bytes": 158334592,
+    "note": "151 MB — above 100 MB threshold, gitignored. Regenerate from r1cs + ptau + ceremony record if needed."
+  },
+  "verification_key": {
+    "file": "cb_final_vkey.json",
+    "sha256": "7258504afedd9707fbc406855627a8a8863a2ca858025d2278bd8c05802edae3"
+  },
+  "ceremony_verification": {
+    "snarkjs_zkv_result": "ZKey Ok!",
+    "verified_contribution_chain": [
+      "#1 openjanus-batch-claim-contributor-1",
+      "#2 Flow VRF beacon block 325996533"
+    ]
+  },
+  "verifier_contract": {
+    "file": "ConfidentialClaimBatchVerifier.sol",
+    "canonical_path": "packages/janus-token/contracts/solidity/ConfidentialClaimBatchVerifier.sol",
+    "sha256": "63ffd412e9d847b6c0e321161fb65c45c8888961e7e4dc26be8b757b7d060dcf",
+    "contract_name": "ConfidentialClaimBatchVerifier",
+    "note": "Renamed from snarkjs default 'Groth16Verifier' to 'ConfidentialClaimBatchVerifier'. All other bytes are canonical snarkjs 0.7.6 output.",
+    "pragma": ">=0.7.0 <0.9.0",
+    "hardhat_compile": "pass"
+  },
+  "pi_b_fp2_swap": {
+    "caller_must_swap": true,
+    "convention": "snarkjs canonical: caller passes pi_b in EIP-197 (imaginary, real) order. See audits-kb vulnerability 003."
+  }
+}
