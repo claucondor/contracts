@@ -1,0 +1,33 @@
+{
+	"contracts": {
+		"ShieldedInbox": {
+			"source": "./contracts/cadence/ShieldedInbox.cdc",
+			"aliases": {
+				"emulator": "f8d6e0586b0a20c7",
+				"testing":  "000000000000000e"
+			}
+		}
+	},
+	"networks": {
+		"emulator": "127.0.0.1:3569",
+		"testing":  "127.0.0.1:3569",
+		"testnet":  "access.devnet.nodes.onflow.org:9000",
+		"mainnet":  "access.mainnet.nodes.onflow.org:9000"
+	},
+	"accounts": {
+		"emulator-account": {
+			"address": "f8d6e0586b0a20c7",
+			"key": {
+				"type": "file",
+				"location": "emulator-account.pkey"
+			}
+		}
+	},
+	"deployments": {
+		"emulator": {
+			"emulator-account": [
+				"ShieldedInbox"
+			]
+		}
+	}
+}
