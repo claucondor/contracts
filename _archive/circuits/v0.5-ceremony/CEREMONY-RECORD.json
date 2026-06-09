@@ -1,0 +1,138 @@
+{
+  "ceremony_version": "v0.5",
+  "date": "2026-05-29",
+  "snarkjs_version": "0.7.6",
+  "production_ready": true,
+  "grade": "pre-mainnet",
+  "grade_notes": "Hermez phase 1 (200+ contributors) + 1 named phase 2 contributor + Flow VRF beacon (unbiasable). For mainnet, recommend adding a 2nd independent contributor from outside the openjanus team.",
+  "ptau": {
+    "source": "Hermez pot14 (200+ contributors, multi-party phase 1)",
+    "file": "pot14_hez.ptau",
+    "power": 14,
+    "max_constraints": 16384,
+    "sha256": "758514f13dc3ca4be14084398750d415a12f2a6eb8f76e53e120f10f7ddd5ef1",
+    "note": "pot18_hez.ptau downloaded by previous agent was CORRUPTED (75MB, out-of-bounds sections). Fell back to verified pot14 from v0.3-ceremony (same sha256, 200+ Hermez contributors). Circuits have max 10,676 constraints — well within pot14 headroom of 16,384."
+  },
+  "circuits": {
+    "amount_disclose": {
+      "circom_file": "amount_disclose.circom",
+      "constraints": 3514,
+      "wires": 3515,
+      "public_inputs": 3,
+      "private_inputs": 1,
+      "curve": "bn128",
+      "protocol": "groth16",
+      "circuit_hash_0000": "ca347e75b0fa2349387ed85bc4cff89c5d695c64dc82744b73b16b23f0063f5269771f46b6a516ce419d2b56a385fde8767b543477ae310958fd82c78b41b657",
+      "r1cs_sha256": "47ff3168393bfb40d30905dda82cbe1791434801a4d024d6bddadd751925f44a",
+      "initial_zkey": {
+        "file": "amount_disclose_0000.zkey",
+        "sha256": "be34f4cab9fedf9a0ca186427ad109268ffb25467f33dba18f07eb8cd7df71da"
+      },
+      "contributions": [
+        {
+          "index": 1,
+          "name": "openjanus-v0.5-contributor-1",
+          "file": "amount_disclose_0001.zkey",
+          "sha256": "1634cd1ac09ec0b20f1853c32f9e3a0626cc96c73bc445ce70f42eeaae224466",
+          "contribution_hash": "37e8b9174f568b4b3f144277dc721e14c9592661 31dd298efa2602a30a54e405e459df8513b729768a519ab72c072a65257b9ec4ea561a6d5cd6ecd44869f873",
+          "entropy_source": "32 bytes from openssl rand -hex 32 (process-local, not logged)"
+        }
+      ],
+      "beacon": {
+        "source": "Flow VRF (RandomBeaconHistory.sourceOfRandomness)",
+        "network": "flow-testnet",
+        "random_beacon_history_address": "0x8c5303eaa26202d6",
+        "block_height": 324191000,
+        "beacon_hex": "02264a91de389ab416785958f4e15705579d0747b770f27b77a512df3ea8a905",
+        "iterations_exp": 10,
+        "contribution_hash": "a53c6f42701b9d67857f12564cfa46a5a9d08273657c307ab6c48762ecfaa4b7a921e1e9aa7dc2a8c1c23550fee297981947aad035ff5f2c7603d291201a182c",
+        "verification": "Reproducible via: flow scripts execute get_vrf.cdc 324191000 --network testnet (script uses RandomBeaconHistory at 0x8c5303eaa26202d6)"
+      },
+      "final_zkey": {
+        "file": "amount_disclose_final.zkey",
+        "sha256": "e585953bd261cf68dc0a029ec3f311ad667a4c3f611a3e5025cff3949e127fe6"
+      },
+      "verification_key": {
+        "file": "amount_disclose_vkey.json",
+        "sha256": "3a3e3962dbf8b663bc65dd286cc1fe20ea9479bc10dc5a6eb6780e494a3ff551"
+      },
+      "verifier_solidity": {
+        "file": "AmountDiscloseVerifier.sol",
+        "sha256": "4883426c4fea00938522c16ec60d0bcf6c47151b6e0759e103801ef6503af30d",
+        "contract_name": "AmountDiscloseVerifier",
+        "note": "Renamed from snarkjs default 'Groth16Verifier' to 'AmountDiscloseVerifier'. All other bytes are canonical snarkjs 0.7.6 output.",
+        "pragma": ">=0.7.0 <0.9.0"
+      },
+      "ceremony_verification": {
+        "snarkjs_zkv_result": "ZKey Ok!",
+        "verified_contribution_chain": [
+          "#1 openjanus-v0.5-contributor-1",
+          "#2 Flow VRF beacon block 324191000"
+        ]
+      }
+    },
+    "confidential_transfer": {
+      "circom_file": "confidential_transfer.circom",
+      "constraints": 10676,
+      "wires": 10674,
+      "public_inputs": 6,
+      "private_inputs": 5,
+      "curve": "bn128",
+      "protocol": "groth16",
+      "circuit_hash_0000": "ce8d6e3a2dc28bce35dbf593d9bf185ab9afb7000ce21598256d919b2b41643e9387bbacc463cafc162faa3fb350cc8522c53385bf90d793e0b6c31a901482ed",
+      "r1cs_sha256": "1c34796da8067163256d7fcbfd4fc8868cdf2e850f1ccd313e8608406c659a6c",
+      "initial_zkey": {
+        "file": "confidential_transfer_0000.zkey",
+        "sha256": "dfdadf4132fd15f2b77cda72e8f824010b9067855b9308e31ac5f615d43b393e"
+      },
+      "contributions": [
+        {
+          "index": 1,
+          "name": "openjanus-v0.5-contributor-1",
+          "file": "confidential_transfer_0001.zkey",
+          "sha256": "0165ea5b67ce642bb4ea20d90be9e5e18e6566d0620ecd51db51b1be7db0ebba",
+          "contribution_hash": "282b5dee710482facbd5eade3422f6bc0221da62b5778ad6c43c20063a49d7e8097d5f3a564c7954afa4190b326a71ca04d1a857b69054e4d6da9f150b16231c",
+          "entropy_source": "32 bytes from openssl rand -hex 32 (process-local, not logged)"
+        }
+      ],
+      "beacon": {
+        "source": "Flow VRF (RandomBeaconHistory.sourceOfRandomness)",
+        "network": "flow-testnet",
+        "random_beacon_history_address": "0x8c5303eaa26202d6",
+        "block_height": 324191000,
+        "beacon_hex": "02264a91de389ab416785958f4e15705579d0747b770f27b77a512df3ea8a905",
+        "iterations_exp": 10,
+        "contribution_hash": "bf4f7281d3ae084a90d3f89155ab033725f161e37699e8e10588e0b4c8b712e0c11be9a03924454d044bf3d75af323c20fb648757d24a95669561199 83bdbc58",
+        "verification": "Reproducible via: flow scripts execute get_vrf.cdc 324191000 --network testnet (script uses RandomBeaconHistory at 0x8c5303eaa26202d6)"
+      },
+      "final_zkey": {
+        "file": "confidential_transfer_final.zkey",
+        "sha256": "dc8ef0018c3a0c3f51605c5fadac697df731c8bd78c028c7b36f6d69c3f52da8"
+      },
+      "verification_key": {
+        "file": "confidential_transfer_vkey.json",
+        "sha256": "eeeac1820ec71b818d70d5352f8cec470e28d020aafd9b6417cf0ca372998e96"
+      },
+      "verifier_solidity": {
+        "file": "ConfidentialTransferVerifier.sol",
+        "sha256": "8e33b9cfa6f8ef11a4d503e588357ecc6fcefd770a2a27608c5298655ae80017",
+        "contract_name": "ConfidentialTransferVerifier",
+        "note": "Renamed from snarkjs default 'Groth16Verifier' to 'ConfidentialTransferVerifier'. All other bytes are canonical snarkjs 0.7.6 output.",
+        "pragma": ">=0.7.0 <0.9.0"
+      },
+      "ceremony_verification": {
+        "snarkjs_zkv_result": "ZKey Ok!",
+        "verified_contribution_chain": [
+          "#1 openjanus-v0.5-contributor-1",
+          "#2 Flow VRF beacon block 324191000"
+        ]
+      }
+    }
+  },
+  "pi_b_fp2_swap": {
+    "verifier_internal_swap": false,
+    "caller_must_swap": true,
+    "convention": "snarkjs canonical: caller passes pi_b in EIP-197 (imaginary, real) order; the SDK's applyPiBSwap util at openjanus-sdk/src/utils/pi-b-swap.ts handles this transformation. Verified against audits-kb vulnerability 003.",
+    "verified": true
+  }
+}
