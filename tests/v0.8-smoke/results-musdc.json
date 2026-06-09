@@ -1,0 +1,87 @@
+{
+  "phase": "9.B",
+  "token": "mUSDC",
+  "started": "2026-06-09T10:19:48.002Z",
+  "steps": {
+    "accounts": {
+      "deployer": "0xFc47B35f79d26A060B652E112c53d7c6057d05FF",
+      "alice2": "0xB6Db10f6f90eb3E43037E746bE215F4F1C2DD20d",
+      "bob2": "0x39128aED50791869902750db81ba1Ee81665ed15",
+      "alice2_key": "0xa19b0755087968f3041111632cd134ecfb47bdbb76646984f00113b716b19841",
+      "bob2_key": "0x19d88fa4c954dce12932cbe3e70301be7cd6b278f98c8629b7b9fbbab8f78916",
+      "ts": "2026-06-09T10:19:48.073Z"
+    },
+    "fund": {
+      "fund_alice2_tx": "0xd531d46250d794ce1b43a3a198e12ae34cb6d2a396185d04d4ff78f60cf3a583",
+      "fund_bob2_tx": "0xb997e66876b4a5879d2d7055cf470bab7fdb663214e8104e02945501776a3b7e",
+      "ts": "2026-06-09T10:20:08.867Z"
+    },
+    "mint_musdc": {
+      "tx": "0xde8216f39700c130a6fafaaac0cabbf98d61ff8e097e4d87394c13b940786ee0",
+      "gas": "68137",
+      "amount": "1000000000",
+      "balance": "1000000000",
+      "ts": "2026-06-09T10:20:18.279Z"
+    },
+    "memokeys": {
+      "alice2_tx": "0x0e90e8acb91fe7c5177260e389a1770885469e8230c3d52b4469826923df6bee",
+      "alice2_gas": "90987",
+      "bob2_tx": "0xe72ddf22e04e61c0b18a3a8b7277a555747b0a5162853fedeedb91aaf3db607d",
+      "bob2_gas": "90975",
+      "verified": true,
+      "ts": "2026-06-09T10:20:30.502Z"
+    },
+    "alice2_wrap": {
+      "approve_tx": "0xee2bcd0adf0d9acda044f9ae53173adb61950ae983a8a47803ae39779c045b62",
+      "tx": "0x1088acf479002dd5674176dd6e22ae0343ac728144392b92b53f0d3cd144df66",
+      "gas": "459674",
+      "amount": "100000000",
+      "commit_x": "13857318762050816611844738151286405963691819234355679617058664313072314117909",
+      "commit_y": "4268701538084634995912303560166124987612320123873671816583975276971808464675",
+      "totalLocked_before": "0",
+      "totalLocked_after": "100000000",
+      "verified": true,
+      "ts": "2026-06-09T10:20:48.775Z"
+    },
+    "alice2_shielded_transfer": {
+      "tx": "0xa29038cb5a44089945f0d737169e38d5970e15f46583da059a9a251097851fc2",
+      "gas": "622946",
+      "transfer_amt": "30000000",
+      "alice2_new_cx": "12794669682802738415236921278067638924658365459156045379078912233690242684205",
+      "alice2_new_cy": "14583249904522091031580670714058091271984499572026457036457803372570472944179",
+      "bob2_inbox_count": "1",
+      "verified": true,
+      "ts": "2026-06-09T10:20:59.350Z"
+    },
+    "bob2_drain_decode": {
+      "drain_tx": "0x9ee8b5047f6dc75d370a063d2514939c01f61afc0eec684590683dda8d7dfa43",
+      "drain_gas": "81611",
+      "decoded_amount": "30000000",
+      "decoded_memo": "v08 musdc test",
+      "expected_amount": "30000000",
+      "expected_memo": "v08 musdc test",
+      "verified": true,
+      "ts": "2026-06-09T10:21:09.152Z"
+    },
+    "alice2_unwrap": {
+      "tx": "0xbc38b4a55f47ffef89209989b56ccdcf6728c46317f3d344d00f0e0460b5280e",
+      "gas": "563150",
+      "amount": "70000000",
+      "alice2_bal_change": "70000000",
+      "alice2_residual_cx": "12739620845021971174100069650092440554335394597681216330819079590694600234599",
+      "alice2_residual_cy": "9877979440173763269141475824944338955165425432928031923812600008517076488170",
+      "totalLocked_before": "100000000",
+      "totalLocked_after": "30000000",
+      "verified": true,
+      "ts": "2026-06-09T10:21:20.390Z"
+    }
+  },
+  "verdict": "GREEN",
+  "finished": "2026-06-09T10:21:20.390Z",
+  "summary": {
+    "alice2_evm": "0xB6Db10f6f90eb3E43037E746bE215F4F1C2DD20d",
+    "bob2_evm": "0x39128aED50791869902750db81ba1Ee81665ed15",
+    "alice2_evm_key": "0xa19b0755087968f3041111632cd134ecfb47bdbb76646984f00113b716b19841",
+    "bob2_evm_key": "0x19d88fa4c954dce12932cbe3e70301be7cd6b278f98c8629b7b9fbbab8f78916"
+  }
+}

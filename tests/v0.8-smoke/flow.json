@@ -1,0 +1,69 @@
+{
+  "contracts": {
+    "JanusFT": {
+      "source": "../../packages/janus-ft/contracts/cadence/JanusFT.cdc",
+      "aliases": {
+        "testnet": "4b6bc58bc8bf5dcc"
+      }
+    },
+    "MockFT": {
+      "source": "../../packages/janus-ft/contracts/cadence/mocks/MockFT.cdc",
+      "aliases": {
+        "testnet": "4b6bc58bc8bf5dcc"
+      }
+    },
+    "ShieldedInbox": {
+      "source": "../../packages/shielded-recovery/contracts/cadence/ShieldedInbox.cdc",
+      "aliases": {
+        "testnet": "4b6bc58bc8bf5dcc"
+      }
+    },
+    "ShieldedCheckpoint": {
+      "source": "../../packages/shielded-recovery/contracts/cadence/ShieldedCheckpoint.cdc",
+      "aliases": {
+        "testnet": "4b6bc58bc8bf5dcc"
+      }
+    },
+    "JanusFlow": {
+      "source": "../../packages/janus-token/contracts/cadence/JanusFlow.cdc",
+      "aliases": {
+        "testnet": "5dcbeb41055ec57e"
+      }
+    },
+    "FungibleToken": {
+      "source": "mainnet://f233dcee88fe0abe.FungibleToken",
+      "aliases": {
+        "testnet": "9a0766d93b6608b7"
+      }
+    },
+    "EVM": {
+      "source": "mainnet://e467b9dd11fa00df.EVM",
+      "aliases": {
+        "testnet": "8c5303eaa26202d6"
+      }
+    }
+  },
+  "networks": {
+    "testnet": "access.devnet.nodes.onflow.org:9000"
+  },
+  "accounts": {
+    "openjanus-v08": {
+      "address": "4b6bc58bc8bf5dcc",
+      "key": {
+        "type": "file",
+        "location": "/home/oydual3/.flow/openjanus-v08.pkey",
+        "signatureAlgorithm": "ECDSA_secp256k1",
+        "hashAlgorithm": "SHA2_256"
+      }
+    },
+    "testnet-bob": {
+      "address": "d807a3992d7be612",
+      "key": {
+        "type": "file",
+        "location": "/home/oydual3/.flow/testnet-bob.pkey",
+        "signatureAlgorithm": "ECDSA_P256",
+        "hashAlgorithm": "SHA3_256"
+      }
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "phase": "9.D",
+  "token": "ALL",
+  "started": "2026-06-09T10:40:17.874Z",
+  "steps": {
+    "janusflow_reset": {
+      "tx": "6704fde99d00736839daaf5dda35ae29079770ad3e883f48a97dfdb107338e2d",
+      "contract": "0xA64340C1d356835A2450306Ffd290Ed52c001Ad3",
+      "users_reset": [
+        "0x6B5138D15763A9d5238EbAd4724e9EBf82286642",
+        "0xd483b62801614c666A2c17e9437644216777E38B"
+      ],
+      "verified": true,
+      "ts": "2026-06-09T10:40:30.557Z"
+    },
+    "janus_erc20_reset": {
+      "tx": "9371aed02ce95ece706fb2097fef972a3a70153b626944909909835f8e217aeb",
+      "contract": "0xFD8F82bE1782AF1F85f4673065e94fb3F8D5387d",
+      "users_reset": [
+        "0xB6Db10f6f90eb3E43037E746bE215F4F1C2DD20d",
+        "0x39128aED50791869902750db81ba1Ee81665ed15"
+      ],
+      "verified": true,
+      "ts": "2026-06-09T10:40:41.263Z"
+    },
+    "janus_ft_reset": {
+      "tx": "e8388b1febe40c2109d4b98b01fe0043de0283642ff4ecfc187ddcf068a79ced",
+      "users_reset": [
+        "0x4b6bc58bc8bf5dcc",
+        "0xd807a3992d7be612"
+      ],
+      "verified": true,
+      "ts": "2026-06-09T10:40:50.737Z"
+    }
+  },
+  "verdict": "GREEN",
+  "finished": "2026-06-09T10:40:50.737Z"
+}

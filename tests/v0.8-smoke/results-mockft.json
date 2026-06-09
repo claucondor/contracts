@@ -1,0 +1,71 @@
+{
+  "phase": "9.C",
+  "token": "MockFT",
+  "started": "2026-06-09T10:35:55.729Z",
+  "steps": {
+    "accounts": {
+      "alice": "0x4b6bc58bc8bf5dcc",
+      "bob": "0xd807a3992d7be612",
+      "ts": "2026-06-09T10:35:55.730Z"
+    },
+    "setup": {
+      "alice_vault_tx": "aa2308f77d483ae6c56740af9e91830aca572280eee388489420c732edc082a1",
+      "alice_registry_tx": "f37058e0fff23e720dc4f3b3531487d0daae3efc5b5b7db558125965f730191b",
+      "bob_inbox_tx": "e9f303ced961d8e11ce6c3aea53339528bb25fd64f1434d53d61b0d4f53ef13c",
+      "ts": "2026-06-09T10:36:29.792Z"
+    },
+    "mint": {
+      "tx": "719227aefa29d0b273da9fdd241fb31b4aa0ddcfc97c318af7f8bd913f7a186a",
+      "amount": "100.00000000",
+      "ts": "2026-06-09T10:36:41.555Z"
+    },
+    "keypairs": {
+      "alice_jub_x": "21473996610240482016613473647622050714805531538478390801397565511031140921705",
+      "alice_jub_y": "120562358566313000116422192958600608043321565792529885423208269324183980578",
+      "bob_jub_x": "8080358028598636016463586451487299035447857706913390150025639567050573230093",
+      "bob_jub_y": "5570967998402723964884390325322520874935614044415270331162741368052517763122",
+      "ts": "2026-06-09T10:36:41.738Z"
+    },
+    "alice_wrap": {
+      "tx": "415c108c05f70c4b7ed5ef9148b842c75afd1b0fcc64f54285fbeb148c8b8c85",
+      "amount": "100.00000000",
+      "commit_x": "6141540497095703214254317005375774701866652810830156408725620297157930812290",
+      "commit_y": "9597512645330761292867364954063224216055931997081990992636548153179906057910",
+      "totalLocked": "0.00000000",
+      "verified": true,
+      "ts": "2026-06-09T10:36:53.485Z"
+    },
+    "alice_shielded_transfer": {
+      "tx": "2c68b48334fecef7592d16c3b02ca206c8ccf1ab56e10bf8b8204b8452dceb1f",
+      "transfer_amt": "30.00000000",
+      "events": [
+        "A.7e60df042a9c0868.FlowToken.TokensWithdrawn",
+        "A.9a0766d93b6608b7.FungibleToken.Withdrawn",
+        "A.7e60df042a9c0868.FlowToken.TokensDeposited",
+        "A.9a0766d93b6608b7.FungibleToken.Deposited",
+        "A.912d5440f7e3769e.FlowFees.FeesDeducted"
+      ],
+      "verified": true,
+      "ts": "2026-06-09T10:37:06.574Z"
+    },
+    "bob_drain_decode": {
+      "drain_tx": "da6e2bc3fbef7d13967848d58980e2d92027a075625bc9452779982ac02a8f42",
+      "decoded_amount": "3000000000",
+      "decoded_memo": "v08 mockft test",
+      "expected_amount": "3000000000",
+      "expected_memo": "v08 mockft test",
+      "verified": true,
+      "ts": "2026-06-09T10:37:17.190Z"
+    },
+    "alice_unwrap": {
+      "tx": "143a417de87309df2019bebd6a5c0e9381017e3fa605b8928b71a29e8e4056ec",
+      "amount": "70.00000000",
+      "totalLocked_before": "0.00000000",
+      "totalLocked_after": "0.00000000",
+      "verified": true,
+      "ts": "2026-06-09T10:37:30.081Z"
+    }
+  },
+  "verdict": "GREEN",
+  "finished": "2026-06-09T10:37:30.081Z"
+}
