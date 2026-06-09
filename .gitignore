@@ -14,3 +14,7 @@ coverage/
 Thumbs.db
 # ZK ceremony files — large binary, not committed
 *.ptau
+
+# Build artifacts (regenerable)
+circuits/aggregate-ceremony/build/*_js/
+circuits/aggregate-ceremony/build/*.wtns
