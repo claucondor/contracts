@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "compile": "hardhat compile --config hardhat.config.cjs",
+    "test": "hardhat test --config hardhat.config.cjs",
     "deploy": "node --experimental-vm-modules scripts/deploy-janus-erc20.mjs",
     "smoke": "node --experimental-vm-modules scripts/smoke-janus-erc20.mjs"
   },

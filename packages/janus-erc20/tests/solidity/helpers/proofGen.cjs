@@ -1,0 +1,1 @@
+../../../../janus-token/tests/solidity/helpers/proofGen.cjs
