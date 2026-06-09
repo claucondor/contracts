@@ -1,0 +1,485 @@
+{
+  "date": "2026-06-05T06:33:35.242Z",
+  "network": "flow-evm-testnet",
+  "chainId": 545,
+  "sdkVersion": "0.7.0",
+  "testDir": "/home/oydual3/openjanus-tests/aggregate-e2e",
+  "wallets": {
+    "bob": {
+      "cadenceAddr": "0xd807a3992d7be612",
+      "coaEvm": "0x00000000000000000000000250d93efba617e0bf",
+      "memoPubX": "19222234516226065540341073568357908060538546049951316278896696288394758406083",
+      "memoPubY": "640174578302420172666463099999374354957047802145654000280031111331625934961",
+      "coaBalanceBefore": "15000000000000000000"
+    },
+    "dave": {
+      "cadenceAddr": "0xd32d9100e1fe983b",
+      "coaEvm": "0x0000000000000000000000027b94cfc8a64971cd",
+      "memoPubX": "20462538354277468371194573100082381515225816317445072060604638772752100000568",
+      "memoPubY": "13303721434824494673727876796388113049457915039886531909467474147048045620254",
+      "coaBalanceBefore": "30000000000000000000"
+    },
+    "eve": {
+      "cadenceAddr": "0x374a28ddf00498e4",
+      "coaEvm": "0x000000000000000000000002f99c41f078c6c238",
+      "memoPubX": "6932624268081373935343063739295426455776447900837008083739985932271613848646",
+      "memoPubY": "1423744306365542490652635112030773671929125337580802265081305025321046842847",
+      "coaBalanceBefore": "30000000000000000000"
+    }
+  },
+  "setup": {
+    "bob": {
+      "memoKeyPublished": false,
+      "memoKeyRotated": false
+    },
+    "dave": {
+      "memoKeyPublished": false,
+      "memoKeyRotated": false
+    },
+    "eve": {
+      "memoKeyPublished": false,
+      "memoKeyRotated": false
+    }
+  },
+  "wraps": [
+    {
+      "step": "wrap-bob-flow-nonce1780641450001",
+      "wallet": "bob",
+      "token": "flow",
+      "grossAmount": "10000000000000000000",
+      "netAmount": "10000000000000000000",
+      "fee": "0",
+      "nonce": "1780641450001",
+      "flowTx": "32ef1e66a56c2ee433774661f35d661faea30532ad169ff4282548afb1d4ad01",
+      "evmTx": "0x72fc1dfd5d089137b5bc71b70cbd6061732142c716c6452b561360ef06a609e0",
+      "postBalance": "10000000000000000000",
+      "pass": true
+    },
+    {
+      "step": "wrap-bob-flow-nonce1780641450002",
+      "wallet": "bob",
+      "token": "flow",
+      "grossAmount": "5000000000000000000",
+      "netAmount": "5000000000000000000",
+      "fee": "0",
+      "nonce": "1780641450002",
+      "flowTx": "c8c2223088d34d20143dccfea485e87b966da7a081fda9442537c73f19acea4d",
+      "evmTx": "0x456823b957ab011a9fef256fb50bab11ce78e5e8a6e856a008339e4b531b6848",
+      "postBalance": "15000000000000000000",
+      "pass": true
+    },
+    {
+      "step": "wrap-bob-mockusdc-nonce1780641450001",
+      "wallet": "bob",
+      "token": "mockusdc",
+      "grossAmount": "3000000",
+      "netAmount": "3000000",
+      "fee": "0",
+      "nonce": "1780641450001",
+      "flowTx": "4b087928a1fe5aa00d2400a4f0521a9a8b08459bb3bcf281afbdb0a02850212c",
+      "evmTx": "0xb3cbf88e8931ec2853d0a36d34591efbcb0e9818d3d46192a771af72fbd207d4",
+      "postBalance": "3000000",
+      "pass": true
+    },
+    {
+      "step": "wrap-dave-flow-nonce1780641450001",
+      "wallet": "dave",
+      "token": "flow",
+      "grossAmount": "8000000000000000000",
+      "netAmount": "8000000000000000000",
+      "fee": "0",
+      "nonce": "1780641450001",
+      "flowTx": "10f44b111aa43de5003cd834fba83ef058a739a8f03e331f7598006b243d578f",
+      "evmTx": "0x6a039e236023099d788815ac39c516e82a1d0bb4cbf78ba4193b0c5d3e840a47",
+      "postBalance": "8000000000000000000",
+      "pass": true
+    },
+    {
+      "step": "wrap-eve-flow-nonce1780641450001",
+      "wallet": "eve",
+      "token": "flow",
+      "grossAmount": "7000000000000000000",
+      "netAmount": "7000000000000000000",
+      "fee": "0",
+      "nonce": "1780641450001",
+      "flowTx": "cd93230c2cdd85a899aec1aab95cda033c13f477baf69715e5b33e7ea2c90aef",
+      "evmTx": "0xa329f5f1e9ab8f9029c08ce917e57fb535f4d8666a072693fdc086e46f4d25a0",
+      "postBalance": "7000000000000000000",
+      "pass": true
+    }
+  ],
+  "tips": [
+    {
+      "step": "bob-dave-2flow",
+      "from": "bob",
+      "to": "dave",
+      "token": "flow",
+      "amount": "2000000000000000000",
+      "senderNewBalance": "13000000000000000000",
+      "flowTx": "5f3780f5124850b687b0c99eee23d976d7edc2db2fd63990b2d68a6f29de6a05",
+      "evmTx": "0x79f7cb52b5ac6016c34b2c3cd0584753bbd3ebe04655e35659b886959b035cc5",
+      "pass": true
+    },
+    {
+      "step": "dave-eve-1flow",
+      "from": "dave",
+      "to": "eve",
+      "token": "flow",
+      "amount": "1000000000000000000",
+      "senderNewBalance": "9000000000000000000",
+      "flowTx": "69950d451459c058dcfd98dd987fef8512f7889423814e040c0506cdca87b8a0",
+      "evmTx": "0x240c560467e1e7b68b556a373db898a34abc2c05d22b44dbf0cd36b29ef5364e",
+      "pass": true
+    },
+    {
+      "step": "eve-bob-05flow",
+      "from": "eve",
+      "to": "bob",
+      "token": "flow",
+      "amount": "500000000000000000",
+      "senderNewBalance": "7500000000000000000",
+      "flowTx": "3b1a0072bf9e74a81ade9b1d1af98639305c019adc7290cd0d6c131577c4d9fd",
+      "evmTx": "0x22af03ae711283a5e478bdeb1f9f5b3ddb3582664fcb15e3c4c0460bc84f3f47",
+      "pass": true
+    },
+    {
+      "step": "bob-dave-3flow",
+      "from": "bob",
+      "to": "dave",
+      "token": "flow",
+      "amount": "3000000000000000000",
+      "senderNewBalance": "10500000000000000000",
+      "flowTx": "08a0dae6bb7c5bb3eb3e12a30564118b2320a2f650ac92af158439cae5c967cf",
+      "evmTx": "0xc569db38b6c5b99df0e255ff8560d41032f594f453bcb6ecbf53776b65246b63",
+      "pass": true
+    },
+    {
+      "step": "bob-eve-05musdc",
+      "from": "bob",
+      "to": "eve",
+      "token": "mockusdc",
+      "amount": "500000",
+      "senderNewBalance": "2500000",
+      "flowTx": "9fea45dc32cb1800b78ec3015735cf1ac681e44a4942c7e34234cb7aceb96ab6",
+      "evmTx": "0x4b07fa0e601e107355a2b3aad2a9fc98a5cf2c71c6f07ac2ab39f0cd5d79516a",
+      "pass": true
+    }
+  ],
+  "recovery": {
+    "bob/flow": {
+      "status": "PASS",
+      "recoveredBalance": "10500000000000000000",
+      "expectedBalance": "10500000000000000000",
+      "balanceMatch": true,
+      "blindingMatch": true,
+      "sourceEventCount": 5,
+      "sourceEvents": [
+        {
+          "kind": "wrap",
+          "blockNumber": 114125056,
+          "txHash": "0x72fc1dfd5d089137b5bc71b70cbd6061732142c716c6452b561360ef06a609e0"
+        },
+        {
+          "kind": "wrap",
+          "blockNumber": 114125121,
+          "txHash": "0x456823b957ab011a9fef256fb50bab11ce78e5e8a6e856a008339e4b531b6848"
+        },
+        {
+          "kind": "send",
+          "blockNumber": 114125399,
+          "txHash": "0x79f7cb52b5ac6016c34b2c3cd0584753bbd3ebe04655e35659b886959b035cc5"
+        },
+        {
+          "kind": "receive",
+          "blockNumber": 114125539,
+          "txHash": "0x22af03ae711283a5e478bdeb1f9f5b3ddb3582664fcb15e3c4c0460bc84f3f47"
+        },
+        {
+          "kind": "send",
+          "blockNumber": 114125608,
+          "txHash": "0xc569db38b6c5b99df0e255ff8560d41032f594f453bcb6ecbf53776b65246b63"
+        }
+      ]
+    },
+    "bob/mockusdc": {
+      "status": "PASS",
+      "recoveredBalance": "2500000",
+      "expectedBalance": "2500000",
+      "balanceMatch": true,
+      "blindingMatch": true,
+      "sourceEventCount": 2,
+      "sourceEvents": [
+        {
+          "kind": "wrap",
+          "blockNumber": 114125192,
+          "txHash": "0xb3cbf88e8931ec2853d0a36d34591efbcb0e9818d3d46192a771af72fbd207d4"
+        },
+        {
+          "kind": "send",
+          "blockNumber": 114125677,
+          "txHash": "0x4b07fa0e601e107355a2b3aad2a9fc98a5cf2c71c6f07ac2ab39f0cd5d79516a"
+        }
+      ]
+    },
+    "dave/flow": {
+      "status": "PASS",
+      "recoveredBalance": "12000000000000000000",
+      "expectedBalance": "12000000000000000000",
+      "balanceMatch": true,
+      "blindingMatch": true,
+      "sourceEventCount": 4,
+      "sourceEvents": [
+        {
+          "kind": "wrap",
+          "blockNumber": 114125258,
+          "txHash": "0x6a039e236023099d788815ac39c516e82a1d0bb4cbf78ba4193b0c5d3e840a47"
+        },
+        {
+          "kind": "receive",
+          "blockNumber": 114125399,
+          "txHash": "0x79f7cb52b5ac6016c34b2c3cd0584753bbd3ebe04655e35659b886959b035cc5"
+        },
+        {
+          "kind": "send",
+          "blockNumber": 114125469,
+          "txHash": "0x240c560467e1e7b68b556a373db898a34abc2c05d22b44dbf0cd36b29ef5364e"
+        },
+        {
+          "kind": "receive",
+          "blockNumber": 114125608,
+          "txHash": "0xc569db38b6c5b99df0e255ff8560d41032f594f453bcb6ecbf53776b65246b63"
+        }
+      ]
+    },
+    "dave/mockusdc": {
+      "status": "SKIP",
+      "reason": "no on-chain activity for this token"
+    },
+    "eve/flow": {
+      "status": "PASS",
+      "recoveredBalance": "7500000000000000000",
+      "expectedBalance": "7500000000000000000",
+      "balanceMatch": true,
+      "blindingMatch": true,
+      "sourceEventCount": 3,
+      "sourceEvents": [
+        {
+          "kind": "wrap",
+          "blockNumber": 114125327,
+          "txHash": "0xa329f5f1e9ab8f9029c08ce917e57fb535f4d8666a072693fdc086e46f4d25a0"
+        },
+        {
+          "kind": "receive",
+          "blockNumber": 114125469,
+          "txHash": "0x240c560467e1e7b68b556a373db898a34abc2c05d22b44dbf0cd36b29ef5364e"
+        },
+        {
+          "kind": "send",
+          "blockNumber": 114125539,
+          "txHash": "0x22af03ae711283a5e478bdeb1f9f5b3ddb3582664fcb15e3c4c0460bc84f3f47"
+        }
+      ]
+    },
+    "eve/mockusdc": {
+      "status": "PASS",
+      "recoveredBalance": "500000",
+      "expectedBalance": "500000",
+      "balanceMatch": true,
+      "blindingMatch": true,
+      "sourceEventCount": 1,
+      "sourceEvents": [
+        {
+          "kind": "receive",
+          "blockNumber": 114125677,
+          "txHash": "0x4b07fa0e601e107355a2b3aad2a9fc98a5cf2c71c6f07ac2ab39f0cd5d79516a"
+        }
+      ]
+    }
+  },
+  "reconciliation": {
+    "bob/flow": {
+      "expected": "10500000000000000000",
+      "actual": "10500000000000000000",
+      "match": true
+    },
+    "bob/mockusdc": {
+      "expected": "2500000",
+      "actual": "2500000",
+      "match": true
+    },
+    "dave/flow": {
+      "expected": "12000000000000000000",
+      "actual": "12000000000000000000",
+      "match": true
+    },
+    "dave/mockusdc": {
+      "expected": "0",
+      "actual": "0",
+      "match": true
+    },
+    "eve/flow": {
+      "expected": "7500000000000000000",
+      "actual": "7500000000000000000",
+      "match": true
+    },
+    "eve/mockusdc": {
+      "expected": "500000",
+      "actual": "500000",
+      "match": true
+    }
+  },
+  "unwrap": {
+    "claimedAmount": "3000000000000000000",
+    "netToRecipient": "3000000000000000000",
+    "fee": "0",
+    "recipient": "0xdeaddeaddeaddeaddeaddeaddeaddeaddeadbeef",
+    "recipientBalance": "3000000000000000000",
+    "recipientReceivedOk": true,
+    "bobNewBalance": "7500000000000000000",
+    "flowTx": "33e8ec10d2949300a915e34dc04a7d086b37be11c80fce1b6d729a055ae9734d",
+    "evmTx": "0xb38dab24592893405ef351974a838cc7740640b0aa8caad68d55af3ce7e9e7f3",
+    "pass": true
+  },
+  "txHashes": [
+    {
+      "step": "fund-bob",
+      "flowTx": "c5c70f39da34c7b72530c5c8edf5d437429cdd79c83504f886412c38c50f5e30",
+      "evmTx": null,
+      "flowscan": "https://testnet.flowscan.io/tx/c5c70f39da34c7b72530c5c8edf5d437429cdd79c83504f886412c38c50f5e30",
+      "evmscan": null
+    },
+    {
+      "step": "reset-bob-JanusFlow",
+      "flowTx": "4be61ca9f8a98489c796f841d148812a008a9a280560a67749d41302aaf12496",
+      "evmTx": "0x39b72f601c7efbc6b8626cb67bf21ac5a724aa49377d9a8e4c05b98e482debda",
+      "flowscan": "https://testnet.flowscan.io/tx/4be61ca9f8a98489c796f841d148812a008a9a280560a67749d41302aaf12496",
+      "evmscan": "https://evm-testnet.flowscan.io/tx/0x39b72f601c7efbc6b8626cb67bf21ac5a724aa49377d9a8e4c05b98e482debda"
+    },
+    {
+      "step": "reset-bob-JanusERC20",
+      "flowTx": "fd1394bd0e20527b05e85a0586dd7620c10dcd5c2180b56fb8a27f8c17ece61e",
+      "evmTx": "0xb6583d5d06e842d56e172530a124a4c16b76d3051bd76b4bf3174bd54d0d9dee",
+      "flowscan": "https://testnet.flowscan.io/tx/fd1394bd0e20527b05e85a0586dd7620c10dcd5c2180b56fb8a27f8c17ece61e",
+      "evmscan": "https://evm-testnet.flowscan.io/tx/0xb6583d5d06e842d56e172530a124a4c16b76d3051bd76b4bf3174bd54d0d9dee"
+    },
+    {
+      "step": "reset-dave-JanusFlow",
+      "flowTx": "74ed1832db742d7d5a08e90db9575376a6bc16ef7a1d3c0df71401aae9d1261e",
+      "evmTx": "0x28ebccbf3afc9661b1fc7211be9699061ebfa69dddbd626ea68aade10adc496d",
+      "flowscan": "https://testnet.flowscan.io/tx/74ed1832db742d7d5a08e90db9575376a6bc16ef7a1d3c0df71401aae9d1261e",
+      "evmscan": "https://evm-testnet.flowscan.io/tx/0x28ebccbf3afc9661b1fc7211be9699061ebfa69dddbd626ea68aade10adc496d"
+    },
+    {
+      "step": "reset-dave-JanusERC20",
+      "flowTx": "6fcecb2791cc912ef6ae1ad50f0699b6c3bf406b22a3e2f4852f98e3601dcc3e",
+      "evmTx": "0x9f3f6b128124ffd5fb386079fdf0fb4c43373307c6c0e593cf212b3ab03334e0",
+      "flowscan": "https://testnet.flowscan.io/tx/6fcecb2791cc912ef6ae1ad50f0699b6c3bf406b22a3e2f4852f98e3601dcc3e",
+      "evmscan": "https://evm-testnet.flowscan.io/tx/0x9f3f6b128124ffd5fb386079fdf0fb4c43373307c6c0e593cf212b3ab03334e0"
+    },
+    {
+      "step": "reset-eve-JanusFlow",
+      "flowTx": "7836b14dbdb9b428efad791cf2eb1740a6baf59d69d7b0c28fdb079e9bcff462",
+      "evmTx": "0x51c2c796880795f4ff54d44ab7cb8904ba0ca0d5089ee5cebee9c629fdb31144",
+      "flowscan": "https://testnet.flowscan.io/tx/7836b14dbdb9b428efad791cf2eb1740a6baf59d69d7b0c28fdb079e9bcff462",
+      "evmscan": "https://evm-testnet.flowscan.io/tx/0x51c2c796880795f4ff54d44ab7cb8904ba0ca0d5089ee5cebee9c629fdb31144"
+    },
+    {
+      "step": "reset-eve-JanusERC20",
+      "flowTx": "6261b83597125e3c8415b131e8cb5f5e4446e06ce6ade9c38473f35e87a16c7a",
+      "evmTx": "0xcc842e769d56a4d5ab7973eb75180d886d5d66566342cd1b268d470343e4d7f3",
+      "flowscan": "https://testnet.flowscan.io/tx/6261b83597125e3c8415b131e8cb5f5e4446e06ce6ade9c38473f35e87a16c7a",
+      "evmscan": "https://evm-testnet.flowscan.io/tx/0xcc842e769d56a4d5ab7973eb75180d886d5d66566342cd1b268d470343e4d7f3"
+    },
+    {
+      "step": "wrap-bob-flow-nonce1780641450001",
+      "flowTx": "32ef1e66a56c2ee433774661f35d661faea30532ad169ff4282548afb1d4ad01",
+      "evmTx": "0x72fc1dfd5d089137b5bc71b70cbd6061732142c716c6452b561360ef06a609e0",
+      "flowscan": "https://testnet.flowscan.io/tx/32ef1e66a56c2ee433774661f35d661faea30532ad169ff4282548afb1d4ad01",
+      "evmscan": "https://evm-testnet.flowscan.io/tx/0x72fc1dfd5d089137b5bc71b70cbd6061732142c716c6452b561360ef06a609e0"
+    },
+    {
+      "step": "wrap-bob-flow-nonce1780641450002",
+      "flowTx": "c8c2223088d34d20143dccfea485e87b966da7a081fda9442537c73f19acea4d",
+      "evmTx": "0x456823b957ab011a9fef256fb50bab11ce78e5e8a6e856a008339e4b531b6848",
+      "flowscan": "https://testnet.flowscan.io/tx/c8c2223088d34d20143dccfea485e87b966da7a081fda9442537c73f19acea4d",
+      "evmscan": "https://evm-testnet.flowscan.io/tx/0x456823b957ab011a9fef256fb50bab11ce78e5e8a6e856a008339e4b531b6848"
+    },
+    {
+      "step": "wrap-bob-mockusdc-nonce1780641450001",
+      "flowTx": "4b087928a1fe5aa00d2400a4f0521a9a8b08459bb3bcf281afbdb0a02850212c",
+      "evmTx": "0xb3cbf88e8931ec2853d0a36d34591efbcb0e9818d3d46192a771af72fbd207d4",
+      "flowscan": "https://testnet.flowscan.io/tx/4b087928a1fe5aa00d2400a4f0521a9a8b08459bb3bcf281afbdb0a02850212c",
+      "evmscan": "https://evm-testnet.flowscan.io/tx/0xb3cbf88e8931ec2853d0a36d34591efbcb0e9818d3d46192a771af72fbd207d4"
+    },
+    {
+      "step": "wrap-dave-flow-nonce1780641450001",
+      "flowTx": "10f44b111aa43de5003cd834fba83ef058a739a8f03e331f7598006b243d578f",
+      "evmTx": "0x6a039e236023099d788815ac39c516e82a1d0bb4cbf78ba4193b0c5d3e840a47",
+      "flowscan": "https://testnet.flowscan.io/tx/10f44b111aa43de5003cd834fba83ef058a739a8f03e331f7598006b243d578f",
+      "evmscan": "https://evm-testnet.flowscan.io/tx/0x6a039e236023099d788815ac39c516e82a1d0bb4cbf78ba4193b0c5d3e840a47"
+    },
+    {
+      "step": "wrap-eve-flow-nonce1780641450001",
+      "flowTx": "cd93230c2cdd85a899aec1aab95cda033c13f477baf69715e5b33e7ea2c90aef",
+      "evmTx": "0xa329f5f1e9ab8f9029c08ce917e57fb535f4d8666a072693fdc086e46f4d25a0",
+      "flowscan": "https://testnet.flowscan.io/tx/cd93230c2cdd85a899aec1aab95cda033c13f477baf69715e5b33e7ea2c90aef",
+      "evmscan": "https://evm-testnet.flowscan.io/tx/0xa329f5f1e9ab8f9029c08ce917e57fb535f4d8666a072693fdc086e46f4d25a0"
+    },
+    {
+      "step": "tip-bob-dave-2flow",
+      "flowTx": "5f3780f5124850b687b0c99eee23d976d7edc2db2fd63990b2d68a6f29de6a05",
+      "evmTx": "0x79f7cb52b5ac6016c34b2c3cd0584753bbd3ebe04655e35659b886959b035cc5",
+      "flowscan": "https://testnet.flowscan.io/tx/5f3780f5124850b687b0c99eee23d976d7edc2db2fd63990b2d68a6f29de6a05",
+      "evmscan": "https://evm-testnet.flowscan.io/tx/0x79f7cb52b5ac6016c34b2c3cd0584753bbd3ebe04655e35659b886959b035cc5"
+    },
+    {
+      "step": "tip-dave-eve-1flow",
+      "flowTx": "69950d451459c058dcfd98dd987fef8512f7889423814e040c0506cdca87b8a0",
+      "evmTx": "0x240c560467e1e7b68b556a373db898a34abc2c05d22b44dbf0cd36b29ef5364e",
+      "flowscan": "https://testnet.flowscan.io/tx/69950d451459c058dcfd98dd987fef8512f7889423814e040c0506cdca87b8a0",
+      "evmscan": "https://evm-testnet.flowscan.io/tx/0x240c560467e1e7b68b556a373db898a34abc2c05d22b44dbf0cd36b29ef5364e"
+    },
+    {
+      "step": "tip-eve-bob-05flow",
+      "flowTx": "3b1a0072bf9e74a81ade9b1d1af98639305c019adc7290cd0d6c131577c4d9fd",
+      "evmTx": "0x22af03ae711283a5e478bdeb1f9f5b3ddb3582664fcb15e3c4c0460bc84f3f47",
+      "flowscan": "https://testnet.flowscan.io/tx/3b1a0072bf9e74a81ade9b1d1af98639305c019adc7290cd0d6c131577c4d9fd",
+      "evmscan": "https://evm-testnet.flowscan.io/tx/0x22af03ae711283a5e478bdeb1f9f5b3ddb3582664fcb15e3c4c0460bc84f3f47"
+    },
+    {
+      "step": "tip-bob-dave-3flow",
+      "flowTx": "08a0dae6bb7c5bb3eb3e12a30564118b2320a2f650ac92af158439cae5c967cf",
+      "evmTx": "0xc569db38b6c5b99df0e255ff8560d41032f594f453bcb6ecbf53776b65246b63",
+      "flowscan": "https://testnet.flowscan.io/tx/08a0dae6bb7c5bb3eb3e12a30564118b2320a2f650ac92af158439cae5c967cf",
+      "evmscan": "https://evm-testnet.flowscan.io/tx/0xc569db38b6c5b99df0e255ff8560d41032f594f453bcb6ecbf53776b65246b63"
+    },
+    {
+      "step": "tip-bob-eve-05musdc",
+      "flowTx": "9fea45dc32cb1800b78ec3015735cf1ac681e44a4942c7e34234cb7aceb96ab6",
+      "evmTx": "0x4b07fa0e601e107355a2b3aad2a9fc98a5cf2c71c6f07ac2ab39f0cd5d79516a",
+      "flowscan": "https://testnet.flowscan.io/tx/9fea45dc32cb1800b78ec3015735cf1ac681e44a4942c7e34234cb7aceb96ab6",
+      "evmscan": "https://evm-testnet.flowscan.io/tx/0x4b07fa0e601e107355a2b3aad2a9fc98a5cf2c71c6f07ac2ab39f0cd5d79516a"
+    },
+    {
+      "step": "unwrap-bob-3flow",
+      "flowTx": "33e8ec10d2949300a915e34dc04a7d086b37be11c80fce1b6d729a055ae9734d",
+      "evmTx": "0xb38dab24592893405ef351974a838cc7740640b0aa8caad68d55af3ce7e9e7f3",
+      "flowscan": "https://testnet.flowscan.io/tx/33e8ec10d2949300a915e34dc04a7d086b37be11c80fce1b6d729a055ae9734d",
+      "evmscan": "https://evm-testnet.flowscan.io/tx/0xb38dab24592893405ef351974a838cc7740640b0aa8caad68d55af3ce7e9e7f3"
+    }
+  ],
+  "verdict": "PASS",
+  "failedStep": null,
+  "error": null,
+  "recoveryMethod": "reconstructAggregatedState (inlined from fix/aggregated-state-recovery) — replays all events, wrap+receive=ADDITIVE, send+unwrap=REPLACE",
+  "finalAssertions": {
+    "totalLockedFlowBefore": "41000000000000000000",
+    "totalLockedFlowAfter": "68000000000000000000",
+    "expectedFlowLocked": "68000000000000000000",
+    "flowLockedOk": true,
+    "totalLockedErc20Before": "0",
+    "totalLockedErc20After": "3000000",
+    "expectedErc20Locked": "3000000",
+    "erc20LockedOk": true
+  }
+}
