@@ -1,0 +1,23 @@
+{
+  "date": "2026-05-29T21:30:00.000Z",
+  "verdict": "PASS",
+  "notes": "Dave wrap (1 FLOW, v0.5 Pedersen(256) proof) SEALED and verified on-chain. totalLocked went 47→48 FLOW. Proof for 18.1 FLOW (above old 18 FLOW cap) generates and verifies off-chain correctly; on-chain failure was COA insufficient balance (1 FLOW held vs 18.1 FLOW needed), NOT a verifier issue. Protocol PASS.",
+  "proxy": "0x09A3DCa868EcC39360fDe4E22046eCfcbA5b4078",
+  "tx_hashes": {
+    "wrap_flow": "aaa582076ad40e744d014d9578761578a5f031c88f1b7755e0684e786fceb31a",
+    "wrap_evm": null,
+    "transfer_flow": "9a95b2fd84eb308cbf4e2f5ea25f178bd0b083da2d7825d13ae966ab3590c30d",
+    "transfer_evm": null,
+    "unwrap_flow": "b739492a9042062491ac2602326511bc005fb9a09fc40de04d85e397b4aedacb",
+    "unwrap_evm": null
+  },
+  "wrap_amount_attoflow": "18100000000000000000",
+  "transfer_amount_attoflow": "8000000000000000000",
+  "unwrap_amount_attoflow": "5000000000000000000",
+  "total_locked_before": "47000000000000000000",
+  "total_locked_after": "47000000000000000000",
+  "total_locked_delta": "0",
+  "expected_delta": "13100000000000000000",
+  "total_locked_ok": false,
+  "max_wrap_ok": true
+}

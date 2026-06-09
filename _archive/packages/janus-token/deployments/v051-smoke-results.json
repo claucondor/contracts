@@ -1,0 +1,18 @@
+{
+  "date": "2026-05-30T01:51:04.700Z",
+  "verdict": "PASS",
+  "ceremony": "v0.5.1 (pot18)",
+  "proxy": "0x09A3DCa868EcC39360fDe4E22046eCfcbA5b4078",
+  "amount_disclose_verifier": "0x9c83b2b1EFFD3bd375b9Bee93Cb618005D6A2Dc4",
+  "wrap_amount_attoflow": "500000000000000000",
+  "wrap_amount_flow": "0.5",
+  "total_locked_before": "48000000000000000000",
+  "total_locked_after": "48500000000000000000",
+  "delta": "500000000000000000",
+  "delta_matches_wrap": true,
+  "off_chain_proof_verified": true,
+  "tx_hashes": {
+    "wrap_flow": "33f65baf2d9796ffa1baf90290d63a38eac60b675873fcbeeddf4483cb69724a",
+    "wrap_evm": "0x15249ffb22677be6565bb947cd534d8cc51fadcb8016c53b9ca76a394474efb3"
+  }
+}

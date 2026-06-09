@@ -1,0 +1,46 @@
+{
+  "date": "2026-05-27T19:05:10.375Z",
+  "contract": "0x3c601a443c81e6cd.JanusFT",
+  "version": "v0.5",
+  "cross_vm_baby_jub_addr": "0x27139AFda7425f51F68D32e0A38b7D43BcB0f870",
+  "steps": {
+    "summary": {
+      "setup": "Alice (charlie) setup registry on her account",
+      "wrap": "Alice wrapped 5.0 FLOW",
+      "xfer": "Alice shielded-transferred 2.0 FLOW to Bob (HIDDEN)",
+      "unwrap": "Alice unwrapped 3.0 FLOW back to herself (PREVIOUSLY BROKEN — now PASS)"
+    }
+  },
+  "tx_hashes": {
+    "setup": "893ae51b1d9a3a6f25c44c4a5b260171de72eb01525388e86c367c02ebf7258c",
+    "wrap": "5b41b62eea72516a9e7cddce837ad0b115cf169fb6ec6d10e488f8e71fa2aef8",
+    "shieldedTransfer": "80ebdd61dc4e872f7b14f0748db36fd9b8c0c8f02aa8d67bbb4a48cad3f416d4",
+    "unwrap": "1a4e3e187d7155b4c3e8e8ee1e087813aaac917cbe91a26423c9d365385f0689"
+  },
+  "invariants": {
+    "precondition_totalLocked_zero": true,
+    "precondition_totalSupply_identity": true,
+    "baby_jub_identity_law_wrap": true,
+    "totalLocked_unchanged_on_xfer": true,
+    "baby_jub_identity_law_xfer": true,
+    "totalLocked_decreased_on_unwrap": true,
+    "recipient_received_unwrapped_flow": true,
+    "homomorphism_closure_end_to_end": true
+  },
+  "privacy_checks": {
+    "shielded_transfer_event_no_amount": true,
+    "no_ft_event_carries_shielded_amount": true,
+    "shielded_transfer_no_cleartext_amount_arg": true,
+    "wrap_event_discloses_amount": true,
+    "unwrap_event_discloses_amount": true
+  },
+  "final_state": {
+    "totalLocked_initial": "0.00000000",
+    "totalLocked_after_wrap": "5.00000000",
+    "totalLocked_after_xfer": "5.00000000",
+    "totalLocked_after_unwrap": "2.00000000",
+    "alice_flow_balance_pre": "101.39838000",
+    "alice_flow_balance_post": "104.39708000"
+  },
+  "overall_pass": true
+}

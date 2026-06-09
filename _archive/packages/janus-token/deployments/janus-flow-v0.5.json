@@ -1,0 +1,42 @@
+{
+  "version": "0.5.0",
+  "date": "2026-05-29T20:37:23.647Z",
+  "network": "flow-evm-testnet",
+  "chainId": 545,
+  "proxy": "0x09A3DCa868EcC39360fDe4E22046eCfcbA5b4078",
+  "prior_impl": "0x708Fda3d53752fe195Eb43B7f7D6aae4a4C95B50",
+  "new_impl": "0xa2607E9EAb1718a2fAf5a1328A7d3a9Aa854efff",
+  "new_amount_disclose_verifier": "0x9c83b2b1EFFD3bd375b9Bee93Cb618005D6A2Dc4",
+  "new_transfer_verifier": "0x48f791D2a4992F448Cc36F12e5500b6553e969b3",
+  "ceremony": {
+    "path": "circuits/v0.5-ceremony/",
+    "ptau": "pot14_hez.ptau",
+    "ptau_sha256": "758514f13dc3ca4be14084398750d415a12f2a6eb8f76e53e120f10f7ddd5ef1",
+    "beacon_block": 324191000,
+    "beacon_hex": "02264a91de389ab416785958f4e15705579d0747b770f27b77a512df3ea8a905"
+  },
+  "tx_hashes": {
+    "amount_verifier_deploy_flow": "64bf9fb20ca03c52dc7a64b302a36dad939c88ce6d370f71673bb1041aca7757",
+    "amount_verifier_deploy_evm": "0x541f286f6f657b206928d428aaf4ffb7ca4c813cb026193a4f62ab734eb3f3c5",
+    "transfer_verifier_deploy_flow": "ca94ca8de8aa9391c9e3ad5859eaac47272a32204b78051c4a77b0706be4d700",
+    "transfer_verifier_deploy_evm": "0x2028da8b6146c2c063465a56263061414bab5deef390fa4cff62df81884ca211",
+    "impl_deploy_flow": "9558d2382f9c3139814e84dd83ae37fe4c7e4933fa693832506a91adf670be82",
+    "impl_deploy_evm": "0xe123a93e6fccbf44ecf7975849cd9f10db5d4061064e3c069845551da4a709e1",
+    "upgrade_flow": "4b5ccf7936bb6cf41eda6c80b101865473cdbb8e58c4668ebd013d25018ab019",
+    "upgrade_evm": "0x1c448e960a783f2164ef82b7fe04dd208f3700ac5b710f2a652f3df5e49bd62c",
+    "set_verifiers_flow": "420b8ae2bb0733d1423e9a99589f955493e40aefe92ef1d3245eed4f07085fdb",
+    "set_verifiers_evm": "0x08c7193a10d005b2202be7f8959f390205770cc7cddbdac84ae5d130f5b0e3cc"
+  },
+  "verification": {
+    "erc1967_upgrade_event_matches_impl": true,
+    "proxy_amount_disclose_verifier_matches": true,
+    "proxy_transfer_verifier_matches": true,
+    "proxy_max_wrap_is_2_128_minus_1": true
+  },
+  "explorer": {
+    "proxy": "https://evm-testnet.flowscan.io/address/0x09A3DCa868EcC39360fDe4E22046eCfcbA5b4078",
+    "new_impl": "https://evm-testnet.flowscan.io/address/0xa2607E9EAb1718a2fAf5a1328A7d3a9Aa854efff",
+    "new_amount_verifier": "https://evm-testnet.flowscan.io/address/0xee5Dc464e7e9782c7b04FC0bEAd0EBC2F366945b",
+    "new_transfer_verifier": "https://evm-testnet.flowscan.io/address/0x93cb6f84B30455CCF2154C671F96201333756D9e"
+  }
+}

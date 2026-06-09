@@ -1,0 +1,46 @@
+{
+  "version": "0.5.1",
+  "date": "2026-05-29T21:35:00Z",
+  "network": "flow-evm-testnet",
+  "chainId": 545,
+  "proxy": "0x09A3DCa868EcC39360fDe4E22046eCfcbA5b4078",
+  "impl": "v0.5.0 (unchanged — no impl deploy in this ceremony bump)",
+  "new_amount_disclose_verifier": "0x9c83b2b1EFFD3bd375b9Bee93Cb618005D6A2Dc4",
+  "new_transfer_verifier": "0x48f791D2a4992F448Cc36F12e5500b6553e969b3",
+  "prior_amount_disclose_verifier": "0xee5Dc464e7e9782c7b04FC0bEAd0EBC2F366945b",
+  "prior_transfer_verifier": "0x93cb6f84B30455CCF2154C671F96201333756D9e",
+  "ceremony": {
+    "path": "circuits/v0.5.1-ceremony/",
+    "ptau_file": "powersOfTau28_hez_final_18.ptau",
+    "ptau_source": "https://storage.googleapis.com/zkevm/ptau/powersOfTau28_hez_final_18.ptau",
+    "ptau_size_bytes": 302072984,
+    "ptau_blake2b": "7e6a9c2e5f05179ddfc923f38f917c9e6831d16922a902b0b4758b8e79c2ab8a81bb5f29952e16ee6c5067ed044d7857b5de120a90704c1d3b637fd94b95b13e",
+    "ptau_sha256": "e970efa7774da80101e0ac336d083ef3339855c98112539338d706b2b89ac694",
+    "beacon_block_height": 324226714,
+    "beacon_hex": "6e470bc1fc410b1a12b72991da0a8b4d7cfc5c8872eff0a3d57ae0c8ecffdc7a",
+    "beacon_type": "Flow VRF testnet block ID",
+    "contributors": 1,
+    "amount_disclose_zkey_verify": "ZKey Ok!",
+    "confidential_transfer_zkey_verify": "ZKey Ok!"
+  },
+  "tx_hashes": {
+    "amount_verifier_deploy_flow": "f0197829cb71bae1bdfd86486b513812346abaafc80a064b78445f496ebfef10",
+    "amount_verifier_deploy_evm": "0x6892ed8a37f7f9c6854e29929a212e7c8b86b2021c937d0d47785012617d7b1f",
+    "transfer_verifier_deploy_flow": "b566965a91228f547a6d13c270b24fc313e6d3d0aeb3da5c2bc2d7ce6b80339e",
+    "transfer_verifier_deploy_evm": "0x5c8ef7f9d69d82e08b12a24289c097c85ff986df0644dbdd636668d365464a69",
+    "set_verifiers_cadence": "7efc015014e988d8b13d6d62bd0cc8bbbc462667bb1c281a2a91b6e008306291",
+    "set_verifiers_evm": "0x0341f5903f9e4469f17207a8255e25dfb3f6a916849f11f50e70d39b850e68d9"
+  },
+  "verification": {
+    "proxy_amount_disclose_verifier_matches": true,
+    "proxy_transfer_verifier_matches": true,
+    "proxy_version_still_0_5_0": true,
+    "proxy_total_locked_attoflow": "48000000000000000000"
+  },
+  "explorer": {
+    "proxy": "https://evm-testnet.flowscan.io/address/0x09A3DCa868EcC39360fDe4E22046eCfcbA5b4078",
+    "new_amount_verifier": "https://evm-testnet.flowscan.io/address/0x9c83b2b1EFFD3bd375b9Bee93Cb618005D6A2Dc4",
+    "new_transfer_verifier": "https://evm-testnet.flowscan.io/address/0x48f791D2a4992F448Cc36F12e5500b6553e969b3",
+    "set_verifiers_evm_tx": "https://evm-testnet.flowscan.io/tx/0x0341f5903f9e4469f17207a8255e25dfb3f6a916849f11f50e70d39b850e68d9"
+  }
+}
