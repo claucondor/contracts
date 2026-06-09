@@ -1,0 +1,81 @@
+{
+  "phase": "10.B",
+  "scenario": "bob-receives-multi-token",
+  "started": "2026-06-09T19:05:17.352Z",
+  "steps": {
+    "accounts": {
+      "alice_b": "0x2738d81A480c09E4df98E8001043BcD44A1C1b59",
+      "alice_b_key": "0x20391045d39646b5e7e7df119cfe911de80c6c113b7c36145bccc5455b401c35",
+      "bob_b": "0xab9D94FeFD574cFb50CEB2adf2012c57a487284e",
+      "bob_b_key": "0x5ba4bf96c9edc4ade561eb7bd020cea5d3bf422d8dd397cf91cd240eebcabab4",
+      "bob_cadence": "0xd807a3992d7be612",
+      "ts": "2026-06-09T19:05:17.408Z"
+    },
+    "fund": {
+      "fund_alice_tx": "0x0475c8bbfa47d13c98a21862dbd370c8357f7053bf49fb9e8ed10969e2fff8b4",
+      "fund_bob_tx": "0xbf98ec7b7acac0fc102d51b7d21b214f4734720c6e023dba71875b1d70d7ddbc",
+      "ts": "2026-06-09T19:05:42.878Z"
+    },
+    "setup": {
+      "alice_memo_tx": "0xa8e3241d9212b70a0c6b82122073f85457de318f4b61e4e5962d6206e40304af",
+      "bob_memo_tx": "0x384f7e55142f71fb2a45cb1063b12dccd5d445512183b1b5527602fd3dde91c4",
+      "ts": "2026-06-09T19:06:11.867Z"
+    },
+    "alice_wraps": {
+      "ts": "2026-06-09T19:06:54.751Z"
+    },
+    "mockft_wrap": {
+      "ts": "2026-06-09T19:07:41.168Z"
+    },
+    "send_flow": {
+      "tx": "0x6b59936df954528aeb5f060bacccd46d50891a8f1a6c336b52d1288de41b7fcd",
+      "amount": "20000000000000000",
+      "to": "0xab9D94FeFD574cFb50CEB2adf2012c57a487284e",
+      "cipher_from_event": true,
+      "ts": "2026-06-09T19:07:53.186Z"
+    },
+    "send_musdc": {
+      "tx": "0xd06ba3950bd48e0c5ad224a62a8468f87fde159de66d7681f4287a09496e65d1",
+      "amount": "2000000",
+      "to": "0xab9D94FeFD574cFb50CEB2adf2012c57a487284e",
+      "ts": "2026-06-09T19:08:02.269Z"
+    },
+    "send_mockft": {
+      "tx": "2be39c9bd9f62a69a143df54e1b85d0ed6b2f420e209a3345a432b007ff033c5",
+      "amount": "200000000",
+      "to": "0xd807a3992d7be612",
+      "ts": "2026-06-09T19:08:14.804Z"
+    },
+    "inbox_counts": {
+      "bob_evm_count": "2",
+      "expected_evm": 2,
+      "ts": "2026-06-09T19:08:15.174Z"
+    },
+    "evm_drain": {
+      "drain_tx": "0xbaeda4af0ccdb3075dcd27e43400aec595f0979e25fac8dd1aee783380bb2b32",
+      "flow_note_found": true,
+      "musdc_note_found": true,
+      "verified": true,
+      "ts": "2026-06-09T19:08:25.392Z"
+    },
+    "cadence_drain": {
+      "drain_tx": "533f3f353b4dc21835cb05416ae9f2ff8b3437ca096b3283ac3ca2e84aeb5057",
+      "decoded_amount": "200000000",
+      "decoded_memo": "mockft tip",
+      "verified": true,
+      "ts": "2026-06-09T19:08:35.206Z"
+    }
+  },
+  "verdict": "GREEN",
+  "finished": "2026-06-09T19:08:35.206Z",
+  "summary": {
+    "alice_b_evm": "0x2738d81A480c09E4df98E8001043BcD44A1C1b59",
+    "alice_b_key": "0x20391045d39646b5e7e7df119cfe911de80c6c113b7c36145bccc5455b401c35",
+    "bob_b_evm": "0xab9D94FeFD574cFb50CEB2adf2012c57a487284e",
+    "bob_b_key": "0x5ba4bf96c9edc4ade561eb7bd020cea5d3bf422d8dd397cf91cd240eebcabab4",
+    "bob_cadence": "0xd807a3992d7be612",
+    "evm_inbox_count_before_drain": 2,
+    "cadence_inbox_count_before_drain": 1,
+    "depositor_distinguish": "PASS"
+  }
+}
