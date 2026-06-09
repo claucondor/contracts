@@ -1,0 +1,67 @@
+{
+  "phase": "10.D",
+  "scenario": "cross-token-independence",
+  "started": "2026-06-09T19:12:53.542Z",
+  "steps": {
+    "accounts": {
+      "alice": "0xFc47B35f79d26A060B652E112c53d7c6057d05FF",
+      "bob_d": "0xdB7Bf662e6E56945EE5DD0EF9AcE51b0A5F03dc0",
+      "bob_d_key": "0x1052912d15996fcfd9dabb7813513d1f7accf530c7e2e5b5c7dc3f485275b905",
+      "carol_d": "0xf829d94A5411ee00523542a5a2c52e8cf3EaB026",
+      "carol_d_key": "0x74f98d5dd9624a09f0726e0450ad5ccd88b39d355acdc243ec319003b59278f6",
+      "combo_a_flow_v": "100000000000000000",
+      "combo_a_musdc_v": "5000000",
+      "ts": "2026-06-09T19:12:53.609Z"
+    },
+    "setup": {
+      "alice_flow_v": "100000000000000000",
+      "alice_musdc_v": "5000000",
+      "alice_ft_v": "300000000",
+      "ts": "2026-06-09T19:14:59.153Z"
+    },
+    "op1_flow_send": {
+      "tx": "0x6381c1839172787738be7421844e8f925adccc2448ea2467d5c477965398a176",
+      "flow_changed": true,
+      "musdc_same": true,
+      "ft_same": true,
+      "isolation_pass": true,
+      "ts": "2026-06-09T19:15:12.027Z"
+    },
+    "op2_musdc_send": {
+      "tx": "0xfa3740b002edb6802a80ca48c14ba35d98f7352ed292cbf980c86d483efec3d1",
+      "flow_same": true,
+      "musdc_changed": true,
+      "ft_same": true,
+      "isolation_pass": true,
+      "ts": "2026-06-09T19:15:31.910Z"
+    },
+    "op3_musdc_unwrap": {
+      "tx": "0xea945ea1964a9522d998f6cea2fcd582a36d84069ab7a0bcfd9d2d42555171ac",
+      "flow_same": true,
+      "musdc_changed": true,
+      "ft_same": true,
+      "isolation_pass": true,
+      "ts": "2026-06-09T19:15:52.903Z"
+    },
+    "op4_ft_send": {
+      "flow_same": true,
+      "musdc_same": true,
+      "ft_changed": true,
+      "isolation_pass": true,
+      "ts": "2026-06-09T19:16:08.819Z"
+    }
+  },
+  "verdict": "GREEN",
+  "finished": "2026-06-09T19:16:08.819Z",
+  "summary": {
+    "alice_evm": "0xFc47B35f79d26A060B652E112c53d7c6057d05FF",
+    "ops_tested": 4,
+    "all_isolation_pass": true,
+    "ops": {
+      "op1_flow_send": true,
+      "op2_musdc_send": true,
+      "op3_musdc_unwrap": true,
+      "op4_ft_send": true
+    }
+  }
+}
