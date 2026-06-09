@@ -1,0 +1,18 @@
+{
+  "name": "@openjanus/aggregate-claim-batch",
+  "version": "0.8.0",
+  "private": true,
+  "description": "ConfidentialClaimBatch circuit — batch drain N inbox notes into a single ZK proof",
+  "scripts": {
+    "compile": "bash compile.sh",
+    "test": "mocha test/witness-gen.test.js --timeout 600000"
+  },
+  "dependencies": {
+    "circomlib": "^2.0.5"
+  },
+  "devDependencies": {
+    "chai": "^4.4.1",
+    "mocha": "^10.7.3",
+    "snarkjs": "^0.7.5"
+  }
+}
