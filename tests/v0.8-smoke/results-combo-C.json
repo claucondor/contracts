@@ -1,0 +1,72 @@
+{
+  "phase": "10.C",
+  "scenario": "multi-recipient-broadcast",
+  "started": "2026-06-09T19:08:55.896Z",
+  "steps": {
+    "accounts": {
+      "alice_c": "0x3C6F42EeC194123713BaC52E41F64f4ff0851f8b",
+      "alice_c_key": "0xa0e9b4b56b0a1e0b9cd804cd63d1606253fb61540a2383d31de6693607ced4ca",
+      "bob_c": "0x0401C769B67035D589b9b73b7C74c856276d7879",
+      "bob_c_key": "0x60ba63de2ad577b65f937179e757635bfd285f969dd1dc4ec31d6c87c8922dd0",
+      "carol": "0x5a0621c691F484b14693D52A049D8db330eB3048",
+      "carol_key": "0x39dad87c88e17b694c79a17db6e146e19c361c1abc6dc17d294f628fc3565950",
+      "dave_cadence": "0xd807a3992d7be612",
+      "ts": "2026-06-09T19:08:55.971Z"
+    },
+    "fund": {
+      "ts": "2026-06-09T19:10:12.515Z"
+    },
+    "memokeys": {
+      "ts": "2026-06-09T19:10:38.763Z"
+    },
+    "alice_wraps": {
+      "ts": "2026-06-09T19:11:43.790Z"
+    },
+    "send_flow_to_bob": {
+      "tx": "0xf0ce86911e2192bc858896c1d043c4dfb9d0109738e0f2742e6a50c9d2264067",
+      "amount": "20000000000000000",
+      "to": "0x0401C769B67035D589b9b73b7C74c856276d7879",
+      "ts": "2026-06-09T19:11:54.472Z"
+    },
+    "send_musdc_to_carol": {
+      "tx": "0xbd3fd652a5e3afec1988f818f95ecc64ffbe4698863a5aa6c65fc4f7426932a7",
+      "amount": "2000000",
+      "to": "0x5a0621c691F484b14693D52A049D8db330eB3048",
+      "ts": "2026-06-09T19:12:01.546Z"
+    },
+    "send_mockft_to_dave": {
+      "ts": "2026-06-09T19:12:16.783Z"
+    },
+    "isolation_check": {
+      "bob_c_count": "1",
+      "carol_count": "1",
+      "bob_depositor_is_flow": true,
+      "carol_depositor_is_erc20": true,
+      "bob_has_no_musdc": true,
+      "ts": "2026-06-09T19:12:17.735Z"
+    },
+    "drain_and_decode": {
+      "bob_c_flow_amount": "20000000000000000",
+      "bob_c_flow_memo": "flow for bob",
+      "carol_musdc_amount": "2000000",
+      "carol_musdc_memo": "musdc for carol",
+      "dave_mockft_amount": "200000000",
+      "dave_mockft_memo": "mockft for dave",
+      "verified": true,
+      "ts": "2026-06-09T19:12:40.793Z"
+    }
+  },
+  "verdict": "GREEN",
+  "finished": "2026-06-09T19:12:40.793Z",
+  "summary": {
+    "alice_c": "0x3C6F42EeC194123713BaC52E41F64f4ff0851f8b",
+    "alice_c_key": "0xa0e9b4b56b0a1e0b9cd804cd63d1606253fb61540a2383d31de6693607ced4ca",
+    "bob_c": "0x0401C769B67035D589b9b73b7C74c856276d7879",
+    "bob_c_key": "0x60ba63de2ad577b65f937179e757635bfd285f969dd1dc4ec31d6c87c8922dd0",
+    "carol": "0x5a0621c691F484b14693D52A049D8db330eB3048",
+    "carol_key": "0x39dad87c88e17b694c79a17db6e146e19c361c1abc6dc17d294f628fc3565950",
+    "dave_cadence": "0xd807a3992d7be612",
+    "isolation_verified": true,
+    "all_decoded_correct": true
+  }
+}
