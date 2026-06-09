@@ -30,6 +30,12 @@
         "testnet": "5dcbeb41055ec57e"
       }
     },
+    "FlowToken": {
+      "source": "mainnet://1654653399040a61.FlowToken",
+      "aliases": {
+        "testnet": "7e60df042a9c0868"
+      }
+    },
     "FungibleToken": {
       "source": "mainnet://f233dcee88fe0abe.FungibleToken",
       "aliases": {

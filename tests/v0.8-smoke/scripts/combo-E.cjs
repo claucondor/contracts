@@ -22,6 +22,7 @@ const path             = require("path");
 
 const {
   generateAmountDiscloseProof,
+  generateProof,
   SUBORDER,
 } = require("../../../packages/janus-token/tests/solidity/helpers/proofGen.cjs");
 
@@ -164,6 +165,14 @@ function arrayUint256(arr) { return { type: "Array", value: arr.map(n => uint256
 function array2d(arr)      { return { type: "Array", value: arr.map(r => ({ type: "Array", value: r.map(n => uint256Arg(n)) })) }; }
 function arrayUint8(buf)   { return { type: "Array", value: Array.from(buf).map(b => ({ type: "UInt8", value: b.toString() })) }; }
 function addressArrayArg(addrs) { return { type: "Array", value: addrs.map(a => ({ type: "Address", value: a })) }; }
+function flatProof(p) {
+  return [
+    p.pA[0], p.pA[1],
+    p.pB[0][0], p.pB[0][1],
+    p.pB[1][0], p.pB[1][1],
+    p.pC[0], p.pC[1],
+  ];
+}
 const strArg    = (s) => ({ type: "String", value: s });
 const uint64Arg = (n) => ({ type: "UInt64",  value: n.toString() });
 
@@ -247,9 +256,9 @@ async function main() {
   };
   saveResults();
 
-  // Fund all fresh wallets
+  // Fund all fresh wallets — keep small: each wallet needs 2×FLOW_WRAP (0.02 each) + gas
   for (const [w, label] of [[aliceE, "alice-E"], [bobE, "bob-E"], [carolE, "carol-E"]]) {
-    await waitTx(await deployer.sendTransaction({ to: w.address, value: ethers.parseEther("0.2") }), `fund-${label}`);
+    await waitTx(await deployer.sendTransaction({ to: w.address, value: ethers.parseEther("0.06") }), `fund-${label}`);
   }
 
   // Contracts
@@ -284,7 +293,8 @@ async function main() {
   flowSend("set_underlying_vault_type.cdc", ALICE_FLOW_ACCT, [strArg("A.4b6bc58bc8bf5dcc.MockFT.Vault")]);
   flowSend("install_registry.cdc", ALICE_FLOW_ACCT, []);
   flowSend("setup_mockft_vault.cdc", ALICE_FLOW_ACCT, []);
-  flowSend("setup_mockft_vault.cdc", BOB_FLOW_ACCT, []);
+  // testnet-bob needs inbox for the shielded transfer (not a MockFT vault — he receives via transfer)
+  flowSend("install_inbox.cdc", BOB_FLOW_ACCT, []);
 
   // Mint USDC for all users
   for (const addr of [aliceE.address, bobE.address, carolE.address]) {
@@ -323,14 +333,18 @@ async function main() {
   const ufixArgFn = (v) => ({ type: "UFix64", value: v });
   const addressArgFn = (a) => ({ type: "Address", value: a });
 
+  // Alice wraps 10 MockFT (enough to keep 5 and transfer 5 to bob)
+  const FT_ALICE_WRAP   = 10n * 100_000_000n;  // 10 FT gross wrap
+  const FT_SEND_TO_BOB  = 5n  * 100_000_000n;  // 5 FT shielded transfer to bob
+
   const ftNonceA = BigInt(Date.now());
   const ftBlA = await randomScalar();
-  const ftWPa = await generateAmountDiscloseProof({ amount: 5n * 100_000_000n, blinding: ftBlA, nonce: ftNonceA });
-  const { ciphertext: ftSnapA, ephemeralPubkey: ftEphA } = await encryptNote({ amount: 5n * 100_000_000n, blinding: ftBlA }, jubCadenceAlice.pubkey);
+  const ftWPa = await generateAmountDiscloseProof({ amount: FT_ALICE_WRAP, blinding: ftBlA, nonce: ftNonceA });
+  const { ciphertext: ftSnapA, ephemeralPubkey: ftEphA } = await encryptNote({ amount: FT_ALICE_WRAP, blinding: ftBlA }, jubCadenceAlice.pubkey);
 
   flowSend("mint_mockft.cdc", ALICE_FLOW_ACCT, [ufixArgFn("10.00000000"), addressArgFn(ALICE_CADENCE_ADDR)]);
   flowSend("wrap_mockft.cdc", ALICE_FLOW_ACCT, [
-    ufixArgFn("5.00000000"), uint256Arg(ftNonceA),
+    ufixArgFn("10.00000000"), uint256Arg(ftNonceA),
     uint256Arg(ftWPa.pubSignals[1]), uint256Arg(ftWPa.pubSignals[2]),
     arrayUint256([ftWPa.pA[0], ftWPa.pA[1]]),
     array2d([[ftWPa.pB[0][1], ftWPa.pB[0][0]], [ftWPa.pB[1][1], ftWPa.pB[1][0]]]),
@@ -338,23 +352,35 @@ async function main() {
     arrayUint8(ftSnapA), uint256Arg(ftEphA.x), uint256Arg(ftEphA.y),
   ]);
 
-  const ftNonceB = BigInt(Date.now());
-  const ftBlB = await randomScalar();
-  const ftWPb = await generateAmountDiscloseProof({ amount: 5n * 100_000_000n, blinding: ftBlB, nonce: ftNonceB });
-  const { ciphertext: ftSnapB, ephemeralPubkey: ftEphB } = await encryptNote({ amount: 5n * 100_000_000n, blinding: ftBlB }, jubCadenceBob.pubkey);
+  // Shielded transfer 5 FT from alice → bob — populates bob's slot in JanusFT.commitments
+  // (bob does NOT need to wrap directly; shielded_transfer uses JanusFT.registryAddress()
+  //  which points to the deployer's public capability and updates the contract-level mapping)
+  const ftSendBl     = await randomScalar();
+  const ftAliceNewBl = await randomScalar();
 
-  flowSend("mint_mockft.cdc", ALICE_FLOW_ACCT, [ufixArgFn("10.00000000"), addressArgFn(BOB_CADENCE_ADDR)]);
-  flowSend("setup_mockft_vault.cdc", BOB_FLOW_ACCT, []);
-  // Send wrapped FT from alice's registry to bob: do a shielded transfer
-  // Actually simpler: bob wraps separately via testnet-bob
-  flowSend("wrap_mockft.cdc", BOB_FLOW_ACCT, [
-    ufixArgFn("5.00000000"), uint256Arg(ftNonceB),
-    uint256Arg(ftWPb.pubSignals[1]), uint256Arg(ftWPb.pubSignals[2]),
-    arrayUint256([ftWPb.pA[0], ftWPb.pA[1]]),
-    array2d([[ftWPb.pB[0][1], ftWPb.pB[0][0]], [ftWPb.pB[1][1], ftWPb.pB[1][0]]]),
-    arrayUint256([ftWPb.pC[0], ftWPb.pC[1]]),
-    arrayUint8(ftSnapB), uint256Arg(ftEphB.x), uint256Arg(ftEphB.y),
+  console.log("  Generating MockFT transfer proof (alice→bob)...");
+  const ftXP = await generateProof({
+    old_value:         FT_ALICE_WRAP,
+    old_blinding:      ftBlA,
+    transfer_value:    FT_SEND_TO_BOB,
+    transfer_blinding: ftSendBl,
+    new_blinding:      ftAliceNewBl,
+  });
+
+  const { ciphertext: ftNote, ephemeralPubkey: ftNoteEph } = await encryptNote(
+    { amount: FT_SEND_TO_BOB, blinding: ftSendBl, memo: "ft e3 test" }, jubCadenceBob.pubkey
+  );
+
+  flowSend("shielded_transfer_mockft.cdc", ALICE_FLOW_ACCT, [
+    addressArgFn(ALICE_CADENCE_ADDR),
+    addressArgFn(BOB_CADENCE_ADDR),
+    arrayUint256(flatProof(ftXP)),
+    arrayUint256(ftXP.pubSignals),
+    arrayUint8(ftNote),
+    uint256Arg(ftNoteEph.x),
+    uint256Arg(ftNoteEph.y),
   ]);
+  console.log("  MockFT shielded transfer alice→bob confirmed");
 
   console.log("  All users wrapped in all contracts");
 
@@ -525,11 +551,10 @@ async function main() {
   // -------------------------------------------------------------------------
   console.log("\n--- Reset E4: All 3 EVM users batch-reset in JanusFlow ---");
 
-  // Re-wrap alice and carol in JanusFlow so they're non-identity again before the batch reset
-  const newAliceFlow = await wrapFlow(jfA, aliceE, jubA.pubkey, FLOW_WRAP, "alice-E-flow-rewrap");
-  const newCarolFlow = await wrapFlow(jfC, carolE, jubC.pubkey, FLOW_WRAP, "carol-E-flow-rewrap");
-  // Rewrap bob too (was reset in E1)
-  const newBobFlow = await wrapFlow(jfB, bobE, jubB.pubkey, FLOW_WRAP, "bob-E-flow-rewrap");
+  // Alice and carol still have non-identity JanusFlow slots from Step 1 (only bob's was reset in E1).
+  // Only rewrap bob so all 3 are non-identity before the batch reset.
+  // Use half of FLOW_WRAP (0.01 FLOW) to stay within bob's remaining budget after Step 1.
+  const newBobFlow = await wrapFlow(jfB, bobE, jubB.pubkey, FLOW_WRAP / 2n, "bob-E-flow-rewrap");
 
   // Verify all non-identity before batch reset
   const pre4 = {
