@@ -3,10 +3,15 @@
 //
 // JanusToken.sol — Abstract base for all Janus confidential tokens.
 //
-// v0.7.1 — amount-disclose aggregate verifier integration
+// v0.8.0 — ShieldedInbox integration + adminBatchResetSlots
 //
-// This version adds the wrapWithProof() path, replacing the old wrap() function:
+// This version integrates ShieldedInbox into shieldedTransfer:
 //
+//   shieldedTransfer() signature simplified — senderSnapshot params dropped.
+//   Recipients receive an on-chain encrypted note in ShieldedInbox automatically.
+//   Senders update their own ShieldedCheckpoint in a separate composable call.
+//
+// Previous change (v0.7.1): amount-disclose aggregate verifier integration.
 //   wrapWithProof() calls AmountDiscloseAggregateVerifier to verify a Groth16
 //   proof that the submitted Pedersen commitment encodes msg.value with a valid
 //   blinding factor. Public inputs: [amount, commitX, commitY, nonce].
@@ -41,6 +46,7 @@
 //   slot 90    memoRegistry             address
 //   slot 91    pedersen2Gen             address  <-- NEW in v0.7.0
 //   slot 92    usedNonces               mapping(address => mapping(uint256 => bool))  <-- NEW in v0.7.1
+//   slot 93    shieldedInbox            address  <-- NEW in v0.8.0
 
 pragma solidity ^0.8.20;
 
@@ -94,6 +100,16 @@ interface IPedersen2Gen {
     ) external view returns (uint256 rx, uint256 ry);
 
     function isOnCurve(uint256 x, uint256 y) external pure returns (bool);
+}
+
+/// @dev Minimal interface for the ShieldedInbox contract.
+interface IShieldedInbox {
+    function deposit(
+        address recipient,
+        bytes calldata ciphertext,
+        uint256 ephPubkeyX,
+        uint256 ephPubkeyY
+    ) external;
 }
 
 // ---------------------------------------------------------------------------
@@ -165,6 +181,11 @@ abstract contract JanusToken is
     /// usedNonces[caller][nonce] = true after the nonce has been consumed.
     mapping(address => mapping(uint256 => bool)) public usedNonces; // slot 92
 
+    /// ShieldedInbox contract — receives encrypted notes on behalf of transfer recipients.
+    /// When set, shieldedTransfer automatically deposits to the recipient's inbox.
+    /// May be address(0) for deployments that do not use ShieldedInbox.
+    IShieldedInbox public shieldedInbox;                            // slot 93
+
     // -----------------------------------------------------------------------
     // Fee constants
     // -----------------------------------------------------------------------
@@ -189,12 +210,11 @@ abstract contract JanusToken is
         uint256 ephPubkeyY
     );
 
-    event ShieldedTransferWithSnapshot(
+    /// @notice Emitted on every shieldedTransfer with the encrypted note for the recipient.
+    /// @dev The sender's encrypted state update is composable via a separate ShieldedCheckpoint.update() call.
+    event ShieldedTransferNote(
         address indexed from,
         address indexed to,
-        bytes encryptedSnapshotFrom,
-        uint256 ephPubkeyFromX,
-        uint256 ephPubkeyFromY,
         bytes encryptedNoteTo,
         uint256 ephPubkeyToX,
         uint256 ephPubkeyToY
@@ -234,7 +254,8 @@ abstract contract JanusToken is
         address _amountDiscloseVerifier,
         address _owner,
         address _memoRegistry,
-        address _pedersen2Gen
+        address _pedersen2Gen,
+        address _inboxAddress
     ) internal onlyInitializing {
         require(_babyJub                != address(0), "JanusToken: zero babyJub");
         require(_transferVerifier       != address(0), "JanusToken: zero transferVerifier");
@@ -242,6 +263,7 @@ abstract contract JanusToken is
         require(_owner                  != address(0), "JanusToken: zero owner");
         require(_memoRegistry           != address(0), "JanusToken: zero memoRegistry");
         require(_pedersen2Gen           != address(0), "JanusToken: zero pedersen2Gen");
+        // _inboxAddress may be address(0) for deployments that do not use ShieldedInbox
 
         __Ownable_init(_owner);
         __UUPSUpgradeable_init();
@@ -251,6 +273,10 @@ abstract contract JanusToken is
         amountDiscloseVerifier = IAmountDiscloseVerifier(_amountDiscloseVerifier);
         memoRegistry           = IMemoKeyRegistry(_memoRegistry);
         pedersen2Gen           = IPedersen2Gen(_pedersen2Gen);
+
+        if (_inboxAddress != address(0)) {
+            shieldedInbox = IShieldedInbox(_inboxAddress);
+        }
 
         totalSupplyCommitment = Point({ x: 0, y: 1 });
     }
@@ -346,12 +372,33 @@ abstract contract JanusToken is
     }
 
     // -----------------------------------------------------------------------
-    // TESTNET-ONLY — adminResetSlot
+    // TESTNET-ONLY — adminResetSlot / adminBatchResetSlots
     // -----------------------------------------------------------------------
 
     uint256 private constant FLOW_EVM_TESTNET_CHAIN_ID = 545;
 
+    /// @notice Maximum number of slots that can be reset in a single batch call.
+    /// @dev Bounded to prevent gas explosion — 100 resets ≈ 2.1M gas (21k per slot).
+    uint256 public constant MAX_BATCH_RESET = 100;
+
+    /// @notice Reset a single user's shielded slot to identity (testnet-only).
     function adminResetSlot(address user) external virtual onlyOwner {
+        _resetSlot(user);
+    }
+
+    /// @notice Reset multiple user slots in one transaction (testnet-only).
+    /// @dev Bounded by MAX_BATCH_RESET to prevent gas explosion.
+    ///      Each slot reset costs ~21k gas; 100 slots ≈ 2.1M gas total.
+    /// @param users Array of addresses whose slots to reset. Length must be <= MAX_BATCH_RESET.
+    function adminBatchResetSlots(address[] calldata users) external onlyOwner {
+        require(users.length <= MAX_BATCH_RESET, "JanusToken: batch too large");
+        for (uint256 i = 0; i < users.length; i++) {
+            _resetSlot(users[i]);
+        }
+    }
+
+    /// @dev Core reset logic shared by adminResetSlot and adminBatchResetSlots.
+    function _resetSlot(address user) internal {
         require(
             block.chainid == FLOW_EVM_TESTNET_CHAIN_ID,
             "JanusToken: adminResetSlot is testnet-only (chainId 545)"
@@ -393,16 +440,34 @@ abstract contract JanusToken is
     }
 
     // -----------------------------------------------------------------------
-    // shieldedTransfer — 9-arg signature compatible with SDK v0.6.3+
+    // shieldedTransfer — 6-arg signature (v0.8.0)
+    //
+    // senderSnapshot params removed: senders update their own ShieldedCheckpoint
+    // in a separate composable call (checkpoint.update(...)), keeping concerns
+    // separated. This lets COA orchestration interleave inbox drains between
+    // transfers without checkpoint overhead on the critical transfer path.
+    //
+    // If shieldedInbox is set, the recipient's encrypted note is atomically
+    // deposited. If ShieldedInbox.deposit reverts (e.g. inbox full at
+    // MAX_INBOX_NOTES), the entire shieldedTransfer reverts — this is
+    // intentional: recipients must drain their inbox occasionally.
     // -----------------------------------------------------------------------
 
+    /// @notice Execute a shielded transfer from msg.sender to `to`.
+    /// @param to               Recipient's EVM address (must not be zero or self).
+    /// @param publicInputs     Groth16 public signals:
+    ///                           [0..1] C_old  (sender's current commitment)
+    ///                           [2..3] C_tx   (amount being transferred)
+    ///                           [4..5] C_new  (sender's post-transfer commitment)
+    /// @param proof            Packed Groth16 proof [pA[2], pB[4], pC[2]].
+    /// @param encryptedNoteTo  ECIES-encrypted note for the recipient (iv||ct||tag).
+    ///                         Deposited atomically to ShieldedInbox if configured.
+    /// @param ephPubkeyToX     X-coordinate of ephemeral pubkey used to encrypt the note.
+    /// @param ephPubkeyToY     Y-coordinate of ephemeral pubkey used to encrypt the note.
     function shieldedTransfer(
         address to,
         uint256[6] calldata publicInputs,
         uint256[8] calldata proof,
-        bytes calldata encryptedSnapshot,
-        uint256 ephPubkeyX,
-        uint256 ephPubkeyY,
         bytes calldata encryptedNoteTo,
         uint256 ephPubkeyToX,
         uint256 ephPubkeyToY
@@ -435,12 +500,14 @@ abstract contract JanusToken is
         );
         commitments[to] = Point({ x: rx, y: ry });
 
+        // Atomically deposit encrypted note to recipient's ShieldedInbox.
+        // Reverts if inbox is full — recipient must drain before more notes arrive.
+        if (address(shieldedInbox) != address(0)) {
+            shieldedInbox.deposit(to, encryptedNoteTo, ephPubkeyToX, ephPubkeyToY);
+        }
+
         emit ConfidentialTransfer(msg.sender, to);
-        emit ShieldedTransferWithSnapshot(
-            msg.sender, to,
-            encryptedSnapshot, ephPubkeyX, ephPubkeyY,
-            encryptedNoteTo, ephPubkeyToX, ephPubkeyToY
-        );
+        emit ShieldedTransferNote(msg.sender, to, encryptedNoteTo, ephPubkeyToX, ephPubkeyToY);
     }
 
     // -----------------------------------------------------------------------

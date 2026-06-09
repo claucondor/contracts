@@ -2,29 +2,40 @@
 // EXPERIMENTAL — NOT AUDITED — DO NOT USE FOR PRODUCTION
 //
 // JanusFlow.sol — Native-FLOW confidential token.
-// Inherits JanusToken (abstract base, v0.7.0).
+// Inherits JanusToken (abstract base).
 // Uses 2-generator Pedersen aggregate commitment for homomorphic accumulation.
+// Integrates ShieldedInbox for atomic note delivery on shieldedTransfer (v0.8.0).
 
-pragma solidity ^0.8.20;
+pragma solidity 0.8.20;
 
 import {JanusToken} from "./JanusToken.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract JanusFlow is JanusToken {
     uint256 public constant MAX_WRAP = type(uint128).max;
-    string  public constant VERSION  = "0.7.0";
+    string  public constant VERSION  = "0.8.0";
 
     // -----------------------------------------------------------------------
     // Initializer — for new proxies
     // -----------------------------------------------------------------------
 
+    /// @notice Initialize a new JanusFlow proxy.
+    /// @param _babyJub                  BabyJubJub curve helper contract.
+    /// @param _transferVerifier         ConfidentialTransfer Groth16 verifier.
+    /// @param _amountDiscloseVerifier   AmountDisclose Groth16 verifier.
+    /// @param _owner                    Initial owner (UUPS upgrade authority).
+    /// @param _memoRegistry             Shared MemoKeyRegistry for recipient pubkeys.
+    /// @param _pedersen2Gen             2-generator Pedersen commitment library.
+    /// @param _inboxAddress             ShieldedInbox contract for atomic note delivery.
+    ///                                  May be address(0) to deploy without inbox.
     function initialize(
         address _babyJub,
         address _transferVerifier,
         address _amountDiscloseVerifier,
         address _owner,
         address _memoRegistry,
-        address _pedersen2Gen
+        address _pedersen2Gen,
+        address _inboxAddress
     ) external initializer {
         __JanusToken_init(
             _babyJub,
@@ -32,7 +43,8 @@ contract JanusFlow is JanusToken {
             _amountDiscloseVerifier,
             _owner,
             _memoRegistry,
-            _pedersen2Gen
+            _pedersen2Gen,
+            _inboxAddress
         );
     }
 
