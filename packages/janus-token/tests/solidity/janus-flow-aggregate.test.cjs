@@ -73,6 +73,11 @@ describe("JanusFlow aggregate commitment: wrap → receive × 2 → shieldedTran
     memoRegistry = await MKR.deploy();
     await memoRegistry.waitForDeployment();
 
+    // Deploy ShieldedInbox (required by v0.8.0 initialize)
+    const InboxF = await ethers.getContractFactory("ShieldedInbox");
+    const inbox = await InboxF.deploy();
+    await inbox.waitForDeployment();
+
     // Deploy JanusFlow impl + proxy
     const implF = await ethers.getContractFactory("JanusFlow");
     const impl = await implF.deploy();
@@ -86,6 +91,7 @@ describe("JanusFlow aggregate commitment: wrap → receive × 2 → shieldedTran
       owner.address,
       await memoRegistry.getAddress(),
       await pedersen.getAddress(),
+      await inbox.getAddress(),
     ]);
     const proxy = await proxyF.deploy(await impl.getAddress(), initData);
     await proxy.waitForDeployment();
@@ -216,7 +222,6 @@ describe("JanusFlow aggregate commitment: wrap → receive × 2 → shieldedTran
       dave.address,
       [pubSignals[0], pubSignals[1], pubSignals[2], pubSignals[3], pubSignals[4], pubSignals[5]],
       [proof.pA[0], proof.pA[1], proof.pB[0][0], proof.pB[0][1], proof.pB[1][0], proof.pB[1][1], proof.pC[0], proof.pC[1]],
-      "0x", 0n, 0n, // encryptedSnapshot, ephPubkeyX, ephPubkeyY
       "0x", 0n, 0n  // encryptedNoteTo, ephPubkeyToX, ephPubkeyToY
     );
     await tx.wait();

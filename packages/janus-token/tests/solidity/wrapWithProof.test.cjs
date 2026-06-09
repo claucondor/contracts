@@ -57,6 +57,11 @@ describe("wrapWithProof: real amount-disclose verifier", function () {
     memoRegistry = await MKR.deploy();
     await memoRegistry.waitForDeployment();
 
+    // Deploy ShieldedInbox for v0.8.0 initialize
+    const InboxF = await ethers.getContractFactory("ShieldedInbox");
+    const inbox = await InboxF.deploy();
+    await inbox.waitForDeployment();
+
     const implF = await ethers.getContractFactory("JanusFlow");
     const impl = await implF.deploy();
     await impl.waitForDeployment();
@@ -69,6 +74,7 @@ describe("wrapWithProof: real amount-disclose verifier", function () {
       owner.address,
       await memoRegistry.getAddress(),
       await pedersen.getAddress(),
+      await inbox.getAddress(),
     ]);
     const proxy = await proxyF.deploy(await impl.getAddress(), initData);
     await proxy.waitForDeployment();
@@ -348,8 +354,7 @@ describe("wrapWithProof: real amount-disclose verifier", function () {
        transferProof.pB[0][0], transferProof.pB[0][1],
        transferProof.pB[1][0], transferProof.pB[1][1],
        transferProof.pC[0], transferProof.pC[1]],
-      "0x", 0n, 0n,
-      "0x", 0n, 0n
+      "0x", 0n, 0n  // encryptedNoteTo, ephPubkeyToX, ephPubkeyToY
     );
 
     // Alice's new commitment = Commit(wrapAmount - txValue, newBlinding)
