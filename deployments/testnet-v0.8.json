@@ -1,0 +1,87 @@
+{
+  "version": "0.8.0",
+  "date": "2026-06-09",
+  "chainId": 545,
+  "network": "flow-evm-testnet",
+  "account": {
+    "cadenceAddress": "0x4b6bc58bc8bf5dcc",
+    "coaEvmAddress": "0x0000000000000000000000020885d7ad3582356a"
+  },
+  "evm": {
+    "babyJubLibrary": "0xD79C90b797949F0956d977989aEf82A81c860e0C",
+    "pedersen2GenLibrary": "0x5EdF7473b1007b4855127bC40fcc89eCDD7fB561",
+    "mockUsdc": "0xd49Ff950279841aaEcf642E85C3a0bBc1FB4B524",
+    "memoKeyRegistry": "0x361bD4d037838A3a9c5408AE465d36077800ee6c",
+    "shieldedInbox": "0x0C787AAcbA9a116EdA4ec05Be41D8474D470bfC6",
+    "shieldedCheckpoint": "0xbF8dbE133FC1319570dBe43E32BFD9a6D64E1E76",
+    "verifiers": {
+      "confidentialTransferAggregate": "0x38e69fE7Ba7c2C586d64DFFc14742641A675666c",
+      "amountDiscloseAggregate": "0xf7B634D41259D0613345633eE1CD193A030A6329",
+      "confidentialClaimBatch": "0x2FBf6baef1D70f5A9aFF2602c934Bd62dcf6Df80"
+    },
+    "janusFlow": {
+      "impl": "0x3bC0EAa6A5737eE8891C77e4E6bD668A223096dF",
+      "proxy": "0xA64340C1d356835A2450306Ffd290Ed52c001Ad3"
+    },
+    "janusErc20": {
+      "impl": "0x8497FAE43B14e6b4119e3dcBd40835B9F812048E",
+      "proxy": "0xFD8F82bE1782AF1F85f4673065e94fb3F8D5387d"
+    }
+  },
+  "cadence": {
+    "shieldedInbox": "0x4b6bc58bc8bf5dcc",
+    "shieldedCheckpoint": "0x4b6bc58bc8bf5dcc",
+    "mockFT": "0x4b6bc58bc8bf5dcc",
+    "janusFT": "0x4b6bc58bc8bf5dcc"
+  },
+  "txHashes": {
+    "accountCreation": "455276f56324e7c834110cf2e6253a0804d24415e36f17b594a7958687205845",
+    "fundingCadence": "7b5482af2f63f3727029370a4f7712d8d64ff0185e210a0dce4522d0934cae8f",
+    "coaSetup": "644ead55681b68373866fb08659a602a2e386b993c87cc8bf6d075744ee4b4a9",
+    "fundCoa": "8fa1dc652ecca173224ecbf641ab3779a5433ef89679665612133876ce22801a",
+    "fundDeployer": "581c04e199a0f2c96ce7e03e14a9a27ee86cfbebecac97425670e3304359a9c3",
+    "cadenceDeploys": {
+      "shieldedInbox": "412818655045502575313bba37e0016ec7a5501cad64b49020a3443fd25efc21",
+      "shieldedCheckpoint": "c16fc0110a223ee0595eb3c69d7d9a342bb16a323473a5eb2d8dfbd6c4e2ffea",
+      "mockFT": "76c9fe5606ce4aa420dff07e72df6a87d490e89bd3c01359a1d4fe3f28246eac",
+      "janusFT": "8abc14ed3ae48b58671a863f7f1cd0099a5060219f2f2f336ff29e8953907cfe"
+    },
+    "evmDeploys": {
+      "babyJub": "0x10fbc98f941e04a5eb3d11ae090dfdcefb290bc9036968ef3a1bd8fc2540c340",
+      "pedersen2Gen": "0x51c6717359fb3dd22522b4394146a0dfc2a798513672c27f5f5668e59d3ffb10",
+      "mockUsdc": "0x58c1b6eb41956123154a87db6a3f265cb3c24b0c426526b32e0b5f48a65b1973",
+      "ctVerifier": "0x027b4f21554fe6258e097809c35ee4ab9418f4d39a3d569e5bd54c9e9fdd996e",
+      "adVerifier": "0xc0e8544b6f6013bb3b5f9d1f02fbfc2aed143b5af57f9a4e72c6163ab375aeb2",
+      "ccbVerifier": "0x0027c97542000d2cb7453bdf280ec374a36dc890aa41ae70231c7c3e79b3ce9c",
+      "memoKeyRegistry": "0x764aa048a558e9ed4645c37d9dadf954002a4ca690741041d9a73dd78dcace01",
+      "shieldedInbox": "0x669bb758565924ec30889c43da1fd764bab7b455e3e5196cc5658b20e9cd98af",
+      "shieldedCheckpoint": "0xd1d2c8729d0b7ad642f5d06f5711ea1dd55dde9e36d7ca2baafc099e29b5f4fd",
+      "janusFlowImpl": "0x9ea16db189efe4b753f5e289aa73414520b28789ed7643a7d73cb459624c4303",
+      "janusFlowProxy": "0xd9ea66ac47a20108d010eb6b647992110e679d01d3a4aba72ef527a5708849ad",
+      "janusErc20Impl": "0x2a35dca9ed52e180d9557b699825c90d584dc56d63278fc8015938ae61cfe59e",
+      "janusErc20Proxy": "0x677ae8356339985b1aaeeb942dcfa127afdd622ee3404b2dc8e0bffdc8af1692"
+    }
+  },
+  "smokeCheck": {
+    "mockUsdcName": "Mock USD Coin",
+    "mockUsdcSymbol": "mUSDC",
+    "mockUsdcDecimals": 6,
+    "janusFlowVersion": "0.8.0",
+    "janusFlowOwner": "0x0000000000000000000000020885D7AD3582356a",
+    "janusFlowShieldedInbox": "0x0C787AAcbA9a116EdA4ec05Be41D8474D470bfC6",
+    "janusErc20Version": "0.8.0",
+    "janusErc20Owner": "0x0000000000000000000000020885D7AD3582356a",
+    "janusErc20Underlying": "0xd49Ff950279841aaEcf642E85C3a0bBc1FB4B524",
+    "janusErc20ShieldedInbox": "0x0C787AAcbA9a116EdA4ec05Be41D8474D470bfC6",
+    "cadenceContracts": ["JanusFT", "MockFT", "ShieldedCheckpoint", "ShieldedInbox"],
+    "allVerified": true
+  },
+  "notes": {
+    "deployerEoa": "0xFc47B35f79d26A060B652E112c53d7c6057d05FF (ephemeral, funded from COA)",
+    "flowSpentEvm": "0.157 FLOW (13 EVM contract deploys)",
+    "flowBridged": "12.0 FLOW to COA",
+    "coaRemainingEvm": "2.0 FLOW",
+    "cadenceRemainingBalance": "2.9757 FLOW",
+    "v071DemoUnchanged": "0x9A83732417947Ef9b7AEa64bF807a345267c2FdA (JanusFlow v0.7.1) still live"
+  }
+}
