@@ -136,8 +136,8 @@ describe("JanusFlow v0.8.0 — ShieldedInbox integration (full ECIES decode)", f
     expect(stored).to.equal(await inbox.getAddress(), "shieldedInbox address must match deployed inbox");
   });
 
-  it("1.b VERSION == '0.8.0'", async function () {
-    expect(await janusFlow.VERSION()).to.equal("0.8.0");
+  it("1.b VERSION == '0.8.1'", async function () {
+    expect(await janusFlow.VERSION()).to.equal("0.8.1");
   });
 
   it("1.c MAX_BATCH_RESET == 100", async function () {
