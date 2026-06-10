@@ -160,15 +160,15 @@ template NoteCommit() {
 //   amounts[N]              — per-note amounts (64-bit each)
 //   blindings[N]            — per-note blindings (252-bit each)
 //
-// Constraint count estimate for N=50:
+// Constraint count estimate for N=10:
 //   Pedersen2Gen (C_old): ~14 500 constraints
 //   Pedersen2Gen (C_new): ~14 500 constraints
-//   NoteCommit × 50:      ~11 500 × 50 = 575 000 constraints
-//   BabyAdd × 50:         ~    50 × 7  =   3 500 constraints (accumulator chain)
+//   NoteCommit × 10:      ~11 500 × 10 = 115 000 constraints
+//   BabyAdd × 10:         ~    10 × 7  =      70 constraints (accumulator chain)
 //   Sum signals + misc:                 <   1 000 constraints
-//   TOTAL:                            ≈ 608 500 constraints
-//   → Minimum ptau: pot20 (2^20 = 1 048 576)
-//   → Recommended:  pot21 for headroom; pot22 for ceremony (conservative, standard)
+//   TOTAL:                            ≈ 145 000 constraints
+//   → Minimum ptau: pot18 (2^18 = 262 144)
+//   → Recommended:  pot20 for headroom; pot22 for ceremony (conservative, standard)
 // ─────────────────────────────────────────────────────────────────────────────
 template ConfidentialClaimBatch(N) {
 
@@ -262,4 +262,4 @@ template ConfidentialClaimBatch(N) {
     cAdd[N-1].yout === C_consumed[1];
 }
 
-component main {public [C_old, C_new, C_consumed]} = ConfidentialClaimBatch(50);
+component main {public [C_old, C_new, C_consumed]} = ConfidentialClaimBatch(10);
