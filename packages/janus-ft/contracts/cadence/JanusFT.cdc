@@ -2,6 +2,15 @@
 //
 // This is the PRODUCTION contract — no stubs, real BabyJub cross-VM, real Groth16 ZK.
 //
+// UPGRADE NOTES (v0.8.0 → v0.8.1 claimBatch):
+//   v0.8.1 adds claimBatch — aggregate multiple ShieldedInbox notes into the caller's
+//   running commitment in a single Groth16-verified cross-VM call.
+//   Verifier: ConfidentialClaimBatchVerifier.sol at 0x2FBf6baef1D70f5A9aFF2602c934Bd62dcf6Df80
+//   Circuit:  pot22 ceremony, N=50 notes max per batch.
+//   Public input layout (6 signals): [C_old_x, C_old_y, C_new_x, C_new_y, C_consumed_x, C_consumed_y]
+//   TRUST ASSUMPTION: consumed notes are NOT marked on-chain in v0.8. C_old state machine
+//   is the sole replay barrier. Mainnet fix: NoteCommitmentTracker (L6).
+//
 // UPGRADE NOTES (v0.7 aggregate-Pedersen → v0.8 shielded-recovery):
 //   v0.8 adds ShieldedInbox integration (STRICT mode) and adminResetSlot / adminBatchResetSlots.
 //   shieldedTransfer now deposits directly to the recipient's on-chain ShieldedInbox.
@@ -63,6 +72,12 @@ access(all) contract JanusFT {
     /// AmountDiscloseAggregateVerifier.sol — Groth16 amount-disclose verifier (v0.7 aggregate)
     access(all) view fun AMOUNT_VERIFIER_ADDR(): String {
         return "0xa80283baB7fcEFC2c75De43DB5a1cBF00E96B984"
+    }
+
+    /// ConfidentialClaimBatchVerifier.sol — Groth16 claimBatch verifier (v0.8.1, pot22, N=50).
+    /// Public input layout: [C_old_x, C_old_y, C_new_x, C_new_y, C_consumed_x, C_consumed_y]
+    access(all) view fun BATCH_CLAIM_VERIFIER_ADDR(): String {
+        return "0x2FBf6baef1D70f5A9aFF2602c934Bd62dcf6Df80"
     }
 
     /// BN254 field prime (= BabyJubJub base field prime)
@@ -222,6 +237,20 @@ access(all) contract JanusFT {
     /// Emitted by adminResetSlot and adminBatchResetSlots when a user's commitment
     /// slot is cleared back to the BabyJubJub identity (no-balance sentinel).
     access(all) event SlotReset(user: Address)
+
+    /// Emitted by claimBatch when inbox notes are aggregated into the caller's commitment.
+    ///
+    /// TRUST ASSUMPTION (v0.8 testnet): consumed notes are NOT marked on-chain after this
+    /// call. The C_old state machine is the sole replay barrier — once C_old advances to
+    /// C_new, any proof referencing the previous C_old fails the consistency check at step 1.
+    /// A caller cannot replay the same proof twice (second call sees C_old = C_new).
+    /// Mainnet fix (L6): NoteCommitmentTracker marks notes spent, closing the window for
+    /// cross-session note reuse.
+    access(all) event BatchClaimed(
+        account:    Address,
+        newCommitX: UInt256,
+        newCommitY: UInt256
+    )
 
     // -----------------------------------------------------------------------
     // Fee events
@@ -446,6 +475,39 @@ access(all) contract JanusFT {
             [pA, pB, pC, pub6]
         )
         let addr = EVM.addressFromString(JanusFT.TRANSFER_VERIFIER_ADDR())
+        let result = coa.call(to: addr, data: calldata, gasLimit: 500_000, value: EVM.Balance(attoflow: 0))
+        if result.status != EVM.Status.successful { return false }
+        if result.data.length < 32 { return false }
+        return result.data[31] == 1
+    }
+
+    /// Verify ConfidentialClaimBatch proof (v0.8.1).
+    /// Public input layout (6 signals):
+    ///   [0..1] C_old      — caller's current commitment
+    ///   [2..3] C_new      — new accumulated commitment (post-claim)
+    ///   [4..5] C_consumed — homomorphic sum of consumed inbox note commitments
+    access(self) fun _verifyBatchClaimProof(
+        proof:        [UInt256],
+        publicInputs: [UInt256],
+        coa:          auth(EVM.Call) &EVM.CadenceOwnedAccount
+    ): Bool {
+        pre {
+            proof.length == 8:        "JanusFT: batchClaim proof must be 8 limbs"
+            publicInputs.length == 6: "JanusFT: batchClaim publicInputs must be 6"
+        }
+        let pA: [UInt256; 2]       = [proof[0], proof[1]]
+        let pB: [[UInt256; 2]; 2]  = [[proof[2], proof[3]], [proof[4], proof[5]]]
+        let pC: [UInt256; 2]       = [proof[6], proof[7]]
+        let pub6: [UInt256; 6]     = [
+            publicInputs[0], publicInputs[1], publicInputs[2],
+            publicInputs[3], publicInputs[4], publicInputs[5]
+        ]
+
+        let calldata = EVM.encodeABIWithSignature(
+            "verifyProof(uint256[2],uint256[2][2],uint256[2],uint256[6])",
+            [pA, pB, pC, pub6]
+        )
+        let addr = EVM.addressFromString(JanusFT.BATCH_CLAIM_VERIFIER_ADDR())
         let result = coa.call(to: addr, data: calldata, gasLimit: 500_000, value: EVM.Balance(attoflow: 0))
         if result.status != EVM.Status.successful { return false }
         if result.data.length < 32 { return false }
@@ -1015,6 +1077,67 @@ access(all) contract JanusFT {
 
     access(all) view fun getUnderlyingVaultTypeIdentifier(): String {
         return self.underlyingVaultTypeIdentifier
+    }
+
+    // -----------------------------------------------------------------------
+    // claimBatch (v0.8.1) — aggregate ShieldedInbox notes into commitment
+    //
+    // Aggregates multiple inbox notes (received via shieldedTransfer) into the
+    // caller's running commitment in a single Groth16-verified cross-VM call.
+    //
+    // Public input layout (ConfidentialClaimBatch circuit, 6 signals):
+    //   [0..1] C_old      — caller's current on-chain commitment (must match)
+    //   [2..3] C_new      — new commitment after aggregation
+    //   [4..5] C_consumed — homomorphic sum of note commitments consumed
+    //
+    // The circuit proves: C_new = C_old + C_consumed (on BabyJubJub).
+    //
+    // TRUST ASSUMPTION (v0.8 testnet):
+    //   Notes in the ShieldedInbox are NOT marked as consumed on-chain after this
+    //   call. The C_old state machine is the sole replay barrier: once C_old
+    //   advances to C_new, any proof referencing the old C_old fails step 1.
+    //   A caller cannot replay the same proof twice — the second call would see
+    //   C_old = C_new (not the previous value).
+    //
+    //   Mainnet fix (L6): NoteCommitmentTracker.sol marks notes spent on the EVM
+    //   side; the Cadence shieldedTransfer checks spent-ness before depositing.
+    //   This closes the window for cross-session note reuse scenarios.
+    // -----------------------------------------------------------------------
+    access(all) fun claimBatch(
+        account:      Address,
+        publicInputs: [UInt256],
+        proof:        [UInt256],
+        coa:          auth(EVM.Call) &EVM.CadenceOwnedAccount
+    ) {
+        pre {
+            publicInputs.length == 6: "JanusFT.claimBatch: publicInputs must have 6 elements"
+            proof.length == 8:         "JanusFT.claimBatch: proof must have 8 limbs"
+        }
+
+        // ── Step 1: C_old consistency check (no cross-VM) ────────────────
+        let current = self.commitments[account] ?? Commitment(x: 0, y: 1)
+        assert(
+            publicInputs[0] == current.x && publicInputs[1] == current.y,
+            message: "JanusFT.claimBatch: C_old mismatch with stored commitment"
+        )
+
+        // ── Step 2: ZK proof verification (cross-VM Groth16) ─────────────
+        let verified = JanusFT._verifyBatchClaimProof(
+            proof: proof, publicInputs: publicInputs, coa: coa
+        )
+        assert(verified, message: "JanusFT.claimBatch: invalid batch claim proof")
+
+        // ── Step 3: Advance commitment to C_new ──────────────────────────
+        self.commitments[account] = Commitment(x: publicInputs[2], y: publicInputs[3])
+
+        emit BatchClaimed(
+            account:    account,
+            newCommitX: publicInputs[2],
+            newCommitY: publicInputs[3]
+        )
+
+        // NOTE(v0.8 testnet): inbox notes NOT marked consumed on-chain.
+        // C_old state machine bounds replay. Mainnet: NoteCommitmentTracker (L6).
     }
 
     // -----------------------------------------------------------------------
