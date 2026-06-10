@@ -18,9 +18,12 @@ Thumbs.db
 # Intermediate zkey files — regenerable from r1cs + ptau + ceremony.json
 circuits/aggregate-claim-batch/ceremony/cb_0000.zkey
 circuits/aggregate-claim-batch/ceremony/cb_0001.zkey
-# final zkey is 151 MB — above 100 MB threshold, gitignored
-# Regenerate: snarkjs zkey beacon cb_0001.zkey cb_final.zkey <beacon_hex> 10
-circuits/aggregate-claim-batch/ceremony/cb_final.zkey
+circuits/aggregate-claim-batch/ceremony/cb_n10_0000.zkey
+circuits/aggregate-claim-batch/ceremony/cb_n10_0001.zkey
+circuits/aggregate-claim-batch/ceremony/cb_n50_archive.zkey
+# final zkey (N=10) is 33 MB — within git limits, committed
+# N=50 was 151 MB and gitignored; N=10 is tracked
+# Regenerate: snarkjs zkey beacon cb_n10_0001.zkey cb_final.zkey <beacon_hex> 10
 
 # Build artifacts (regenerable)
 circuits/aggregate-ceremony/build/*_js/
