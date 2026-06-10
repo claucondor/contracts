@@ -50,6 +50,9 @@
       "mockFT": "76c9fe5606ce4aa420dff07e72df6a87d490e89bd3c01359a1d4fe3f28246eac",
       "janusFT": "8abc14ed3ae48b58671a863f7f1cd0099a5060219f2f2f336ff29e8953907cfe"
     },
+    "cadenceUpdates": {
+      "janusFT_v081_claimBatch": "71da1a3adf8a948e84089bf1b979abd48c098df6fee32e37ab2b672a429336b0"
+    },
     "evmDeploys": {
       "babyJub": "0x10fbc98f941e04a5eb3d11ae090dfdcefb290bc9036968ef3a1bd8fc2540c340",
       "pedersen2Gen": "0x51c6717359fb3dd22522b4394146a0dfc2a798513672c27f5f5668e59d3ffb10",
