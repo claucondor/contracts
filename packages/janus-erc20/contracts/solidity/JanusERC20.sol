@@ -1,8 +1,18 @@
 // SPDX-License-Identifier: MIT
 // EXPERIMENTAL — NOT AUDITED — DO NOT USE FOR PRODUCTION
 //
-// JanusERC20.sol — Confidential ERC20 wrapper (v0.8.0).
+// JanusERC20.sol — Confidential ERC20 wrapper (v0.8.1).
 // Inherits JanusToken abstract base v0.8.0 (ShieldedInbox integration).
+//
+// v0.8.1 changes:
+//   - claimBatch() added to JanusERC20 directly (not the base) to avoid
+//     slot collision: janus-token base adds batchClaimVerifier at slot 94, but
+//     JanusERC20 already uses slot 94 for `underlying`.
+//   - batchClaimVerifier stored at slot 95 (consuming one slot from __gapERC20;
+//     gap reduced from uint256[50] to uint256[49]).
+//   - setBatchClaimVerifier() admin setter added (owner-only).
+//   - IBatchClaimVerifier interface added inline.
+//   - VERSION bumped to "0.8.1".
 //
 // Changes from v0.7.0:
 //   - JanusToken base upgraded to v0.8.0: ShieldedInbox at slot 93, shared
@@ -38,6 +48,17 @@ interface IERC20 {
     function decimals() external view returns (uint8);
 }
 
+/// @dev ConfidentialClaimBatchVerifier — 6 public inputs (pot22 ceremony, N=50 notes).
+/// Public input layout: [C_old_x, C_old_y, C_new_x, C_new_y, C_consumed_x, C_consumed_y]
+interface IBatchClaimVerifier {
+    function verifyProof(
+        uint[2] calldata _pA,
+        uint[2][2] calldata _pB,
+        uint[2] calldata _pC,
+        uint[6] calldata _pubSignals
+    ) external view returns (bool);
+}
+
 // ---------------------------------------------------------------------------
 // JanusERC20 — concrete implementation for any ERC20 underlying
 // ---------------------------------------------------------------------------
@@ -45,7 +66,7 @@ interface IERC20 {
 contract JanusERC20 is JanusToken {
 
     // Version sentinel — readable on-chain and in deployment manifests.
-    string  public constant VERSION  = "0.8.0";
+    string  public constant VERSION  = "0.8.1";
 
     // Hard cap on a single wrap (18e18 token units). Keeps individual
     // commitments well within the BabyJubJub subgroup order.
@@ -53,13 +74,24 @@ contract JanusERC20 is JanusToken {
 
     // -----------------------------------------------------------------------
     // Storage — slots after JanusToken base (slot 93 = shieldedInbox)
+    //
+    // LAYOUT NOTE: janus-erc20's JanusToken base ends at slot 93 (shieldedInbox).
+    // Slot 94 is `underlying` — already deployed to testnet proxy.
+    // Slot 95 is `batchClaimVerifier` — new in v0.8.1, consumed from __gapERC20.
+    // The janus-token package adds batchClaimVerifier at slot 94 in its base
+    // (JanusFlow has no child slots), but this package cannot do the same due to
+    // the `underlying` slot already occupying slot 94 on deployed proxies.
     // -----------------------------------------------------------------------
 
     /// @notice The underlying ERC20 token held in escrow.
     address public underlying;                   // slot 94
 
-    /// @dev Reserved gap for future ERC20-specific state variables.
-    uint256[50] private __gapERC20;              // slots 95..144
+    /// @dev Batch claim verifier — ConfidentialClaimBatchVerifier (pot22 ceremony, N=50).
+    /// Set via initialize() for fresh deploys or setBatchClaimVerifier() post-upgrade.
+    IBatchClaimVerifier public batchClaimVerifier; // slot 95
+
+    /// @dev Reserved gap for future ERC20-specific state variables (reduced from 50 to 49).
+    uint256[49] private __gapERC20;              // slots 96..144
 
     // -----------------------------------------------------------------------
     // Initializer — for new proxies (v0.8.0)
@@ -75,6 +107,8 @@ contract JanusERC20 is JanusToken {
     /// @param _pedersen2Gen             2-generator Pedersen commitment library.
     /// @param _inboxAddress             ShieldedInbox for atomic note delivery.
     ///                                  May be address(0) for deployments without inbox.
+    /// @param _batchClaimVerifier       ConfidentialClaimBatchVerifier (pot22) for claimBatch().
+    ///                                  May be address(0) — set later via setBatchClaimVerifier().
     function initialize(
         address _babyJub,
         address _transferVerifier,
@@ -83,7 +117,8 @@ contract JanusERC20 is JanusToken {
         address _owner,
         address _memoRegistry,
         address _pedersen2Gen,
-        address _inboxAddress
+        address _inboxAddress,
+        address _batchClaimVerifier
     ) external initializer {
         require(_underlying != address(0), "JanusERC20: zero underlying");
         __JanusToken_init(
@@ -96,6 +131,9 @@ contract JanusERC20 is JanusToken {
             _inboxAddress
         );
         underlying = _underlying;
+        if (_batchClaimVerifier != address(0)) {
+            batchClaimVerifier = IBatchClaimVerifier(_batchClaimVerifier);
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -290,6 +328,74 @@ contract JanusERC20 is JanusToken {
     /// @notice Returns the contract's current balance of the underlying ERC20.
     function underlyingBalance() external view returns (uint256) {
         return IERC20(underlying).balanceOf(address(this));
+    }
+
+    // -----------------------------------------------------------------------
+    // claimBatch — batch shielded-inbox claim (v0.8.1)
+    //
+    // Mirrors JanusToken.claimBatch (janus-token package) with identical logic.
+    // Defined here rather than the base because `batchClaimVerifier` lives at
+    // slot 95 in JanusERC20 (base slot 94 is occupied by `underlying`).
+    //
+    // Public input layout (6 signals):
+    //   [0] C_old_x, [1] C_old_y — current commitment (circuit-bound to on-chain)
+    //   [2] C_new_x, [3] C_new_y — new commitment after draining N notes
+    //   [4] C_consumed_x, [5] C_consumed_y — sum of N note commitments
+    //
+    // Proof format uint256[8]: [pA[2], pB row0[2], pB row1[2], pC[2]] (snarkjs)
+    //
+    // Trust model: same as janus-token/JanusToken.sol — see that file for full docs.
+    // v0.8 testnet: notes not marked consumed on-chain; mainnet fix requires
+    // NoteCommitmentTracker.sol (planned post-v0.8).
+    // -----------------------------------------------------------------------
+
+    /// @notice Emitted when a user batch-claims N inbox notes in a single proof.
+    event BatchClaimed(address indexed user, uint256 newCommitX, uint256 newCommitY);
+
+    /// @notice Set or update the BatchClaimVerifier address. Owner-only.
+    /// @dev Call after UUPS upgrade to wire slot 95 (zero until set).
+    function setBatchClaimVerifier(address _verifier) external onlyOwner {
+        require(_verifier != address(0), "JanusERC20: zero batchClaimVerifier");
+        batchClaimVerifier = IBatchClaimVerifier(_verifier);
+    }
+
+    /// @notice Batch-claim up to 50 ShieldedInbox notes with a single Groth16 proof.
+    /// @param publicInputs  [C_old_x, C_old_y, C_new_x, C_new_y, C_consumed_x, C_consumed_y]
+    /// @param proof         Groth16 proof packed as [pA[2], pB[4], pC[2]] (snarkjs flat format).
+    function claimBatch(
+        uint256[6] calldata publicInputs,
+        uint256[8] calldata proof
+    ) external {
+        require(
+            address(batchClaimVerifier) != address(0),
+            "JanusERC20: batchClaimVerifier not set"
+        );
+
+        // 1. Verify the Groth16 proof (pot22 ceremony).
+        require(
+            batchClaimVerifier.verifyProof(
+                [proof[0], proof[1]],
+                [[proof[2], proof[3]], [proof[4], proof[5]]],
+                [proof[6], proof[7]],
+                publicInputs
+            ),
+            "JanusERC20: invalid batch proof"
+        );
+
+        // 2. Verify C_old matches caller's current on-chain commitment.
+        Point memory current = _effectiveCommitment(msg.sender);
+        require(
+            current.x == publicInputs[0] && current.y == publicInputs[1],
+            "JanusERC20: C_old mismatch with stored commit"
+        );
+
+        // 3. Update commitment to C_new.
+        commitments[msg.sender] = Point({ x: publicInputs[2], y: publicInputs[3] });
+
+        emit BatchClaimed(msg.sender, publicInputs[2], publicInputs[3]);
+
+        // NOTE(v0.8 testnet): inbox notes NOT marked consumed on-chain.
+        // See circuits/aggregate-claim-batch/README.md §6 for mainnet fix.
     }
 }
 

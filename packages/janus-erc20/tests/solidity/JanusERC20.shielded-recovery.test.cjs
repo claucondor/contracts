@@ -105,6 +105,7 @@ async function deployStack() {
     await memoRegistry.getAddress(),
     await pedersen.getAddress(),
     await inbox.getAddress(),
+    ethers.ZeroAddress,   // _batchClaimVerifier: address(0) for legacy tests
   ]);
   const proxy = await (await proxyF.deploy(await impl.getAddress(), initData)).waitForDeployment();
 

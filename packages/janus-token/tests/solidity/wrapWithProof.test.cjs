@@ -75,6 +75,7 @@ describe("wrapWithProof: real amount-disclose verifier", function () {
       await memoRegistry.getAddress(),
       await pedersen.getAddress(),
       await inbox.getAddress(),
+      ethers.ZeroAddress,   // _batchClaimVerifier: address(0) for legacy tests
     ]);
     const proxy = await proxyF.deploy(await impl.getAddress(), initData);
     await proxy.waitForDeployment();

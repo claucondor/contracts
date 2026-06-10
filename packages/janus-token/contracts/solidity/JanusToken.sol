@@ -3,6 +3,11 @@
 //
 // JanusToken.sol — Abstract base for all Janus confidential tokens.
 //
+// v0.8.1 — claimBatch entry function wired to ConfidentialClaimBatchVerifier
+//           Lets users drain N=50 ShieldedInbox notes in one Groth16 proof.
+//           batchClaimVerifier stored at slot 94 (after shieldedInbox at 93).
+//           See circuits/aggregate-claim-batch/README.md for trust model.
+//
 // v0.8.0 — ShieldedInbox integration + adminBatchResetSlots
 //
 // This version integrates ShieldedInbox into shieldedTransfer:
@@ -47,6 +52,7 @@
 //   slot 91    pedersen2Gen             address  <-- NEW in v0.7.0
 //   slot 92    usedNonces               mapping(address => mapping(uint256 => bool))  <-- NEW in v0.7.1
 //   slot 93    shieldedInbox            address  <-- NEW in v0.8.0
+//   slot 94    batchClaimVerifier       address  <-- NEW in v0.8.1
 
 pragma solidity ^0.8.20;
 
@@ -112,6 +118,17 @@ interface IShieldedInbox {
     ) external;
 }
 
+/// @dev ConfidentialClaimBatchVerifier — 6 public inputs (pot22 ceremony, N=50 notes).
+/// Public input layout: [C_old_x, C_old_y, C_new_x, C_new_y, C_consumed_x, C_consumed_y]
+interface IBatchClaimVerifier {
+    function verifyProof(
+        uint[2] calldata _pA,
+        uint[2][2] calldata _pB,
+        uint[2] calldata _pC,
+        uint[6] calldata _pubSignals
+    ) external view returns (bool);
+}
+
 // ---------------------------------------------------------------------------
 // JanusToken — abstract base (v0.7.0, aggregate commitment upgrade)
 // ---------------------------------------------------------------------------
@@ -146,7 +163,10 @@ abstract contract JanusToken is
     //   slot 10  feeRecipient (20B) + feeBps (2B)  packed
     //   slot 11..89  __gap[79]
     //   slot 90  memoRegistry
-    //   slot 91  pedersen2Gen   <-- NEW
+    //   slot 91  pedersen2Gen   <-- NEW in v0.7.0
+    //   slot 92  usedNonces     <-- NEW in v0.7.1
+    //   slot 93  shieldedInbox  <-- NEW in v0.8.0
+    //   slot 94  batchClaimVerifier <-- NEW in v0.8.1
     // -----------------------------------------------------------------------
 
     IBabyJub                       public babyJub;                  // slot 0
@@ -185,6 +205,11 @@ abstract contract JanusToken is
     /// When set, shieldedTransfer automatically deposits to the recipient's inbox.
     /// May be address(0) for deployments that do not use ShieldedInbox.
     IShieldedInbox public shieldedInbox;                            // slot 93
+
+    /// Batch claim verifier — ConfidentialClaimBatchVerifier (pot22 ceremony, N=50 notes).
+    /// Set at deploy time via initializer or post-upgrade via setBatchClaimVerifier().
+    /// May be address(0) until wired; claimBatch() reverts if unset.
+    IBatchClaimVerifier public batchClaimVerifier;                  // slot 94
 
     // -----------------------------------------------------------------------
     // Fee constants
@@ -235,6 +260,12 @@ abstract contract JanusToken is
         uint256 priorCommitmentY
     );
 
+    /// @notice Emitted when a user successfully batch-claims N inbox notes in a single proof.
+    /// @param user       The caller whose commitment was updated.
+    /// @param newCommitX X coordinate of the new commitment C_new.
+    /// @param newCommitY Y coordinate of the new commitment C_new.
+    event BatchClaimed(address indexed user, uint256 newCommitX, uint256 newCommitY);
+
     event FeeCollected(address indexed user, uint256 fee, string op);
     event FeeRecipientChanged(address indexed oldRecipient, address indexed newRecipient);
     event FeeBpsChanged(uint16 oldBps, uint16 newBps);
@@ -255,7 +286,8 @@ abstract contract JanusToken is
         address _owner,
         address _memoRegistry,
         address _pedersen2Gen,
-        address _inboxAddress
+        address _inboxAddress,
+        address _batchClaimVerifier
     ) internal onlyInitializing {
         require(_babyJub                != address(0), "JanusToken: zero babyJub");
         require(_transferVerifier       != address(0), "JanusToken: zero transferVerifier");
@@ -264,9 +296,11 @@ abstract contract JanusToken is
         require(_memoRegistry           != address(0), "JanusToken: zero memoRegistry");
         require(_pedersen2Gen           != address(0), "JanusToken: zero pedersen2Gen");
         // _inboxAddress may be address(0) for deployments that do not use ShieldedInbox
+        // _batchClaimVerifier may be address(0) — set via setBatchClaimVerifier() post-upgrade
 
         __Ownable_init(_owner);
-        __UUPSUpgradeable_init();
+        // Note: __UUPSUpgradeable_init() was a no-op in OZ 5.0.x and removed in 5.1+.
+        // _authorizeUpgrade is wired via override — no init call needed.
 
         babyJub                = IBabyJub(_babyJub);
         transferVerifier       = IConfidentialTransferVerifier(_transferVerifier);
@@ -276,6 +310,10 @@ abstract contract JanusToken is
 
         if (_inboxAddress != address(0)) {
             shieldedInbox = IShieldedInbox(_inboxAddress);
+        }
+
+        if (_batchClaimVerifier != address(0)) {
+            batchClaimVerifier = IBatchClaimVerifier(_batchClaimVerifier);
         }
 
         totalSupplyCommitment = Point({ x: 0, y: 1 });
@@ -292,6 +330,14 @@ abstract contract JanusToken is
     function setAmountDiscloseVerifier(address _verifier) external onlyOwner {
         require(_verifier != address(0), "JanusToken: zero amountDiscloseVerifier");
         amountDiscloseVerifier = IAmountDiscloseVerifier(_verifier);
+    }
+
+    /// @notice Set or update the BatchClaimVerifier address. Owner-only.
+    /// @dev Called after UUPS upgrade (slot 94 is zero on upgraded proxies until this is set).
+    ///      May also be called to rotate to a new verifier after a re-ceremony.
+    function setBatchClaimVerifier(address _verifier) external onlyOwner {
+        require(_verifier != address(0), "JanusToken: zero batchClaimVerifier");
+        batchClaimVerifier = IBatchClaimVerifier(_verifier);
     }
 
     // -----------------------------------------------------------------------
@@ -369,6 +415,88 @@ abstract contract JanusToken is
         }
         fee = (grossAmount * feeBps) / 10000;
         net = grossAmount - fee;
+    }
+
+    // -----------------------------------------------------------------------
+    // claimBatch — batch shielded-inbox claim (v0.8.1)
+    //
+    // Lets a user drain up to N=50 ShieldedInbox notes in a single Groth16 proof,
+    // replacing the blinding-overflow workaround of issuing N separate shielded
+    // transfers.  The circuit is circuits/aggregate-claim-batch (pot22 ceremony).
+    //
+    // Public input layout (6 signals, fixed by the verifier ABI):
+    //   [0] C_old_x   — x of user's current on-chain commitment (circuit-bound)
+    //   [1] C_old_y   — y of user's current on-chain commitment
+    //   [2] C_new_x   — x of user's new commitment after draining N notes
+    //   [3] C_new_y   — y of user's new commitment
+    //   [4] C_consumed_x — x of the sum of all N note commitments (public witness)
+    //   [5] C_consumed_y — y of the sum
+    //
+    // Proof format (uint256[8]):
+    //   [0..1]  pA        — G1 point
+    //   [2..3]  pB row 0  — G2 pre-swapped (snarkjs convention: [pi_b[0][1], pi_b[0][0]])
+    //   [4..5]  pB row 1  — G2 pre-swapped: [pi_b[1][1], pi_b[1][0]]
+    //   [6..7]  pC        — G1 point
+    //
+    // Trust model (v0.8 testnet):
+    //   The circuit verifies C_old, C_new, and C_consumed are mutually consistent
+    //   given the private (amounts, blindings) witnesses.  However, the on-chain
+    //   verifier does NOT cross-check C_consumed against a registry of deposited notes.
+    //   A malicious prover could fabricate (amounts, blindings) pairs that sum to
+    //   any C_consumed and still pass the circuit, allowing them to claim amounts
+    //   they never received.  This does NOT break the commitment state machine
+    //   (C_new is circuit-constrained), but it violates "only claim what you received."
+    //
+    //   Mainnet-grade fix (planned post-v0.8): introduce NoteCommitmentTracker.sol
+    //   that records Commit(amount, blinding) for every deposit.  claimBatch() will
+    //   then compute the on-chain sum of claimed indices and pass it as a
+    //   verifier-side constraint — the prover cannot substitute a different value.
+    //
+    //   For v0.8 testnet, note-consumption replay is bounded by the C_old state machine:
+    //   once claimBatch() succeeds, C_old transitions to C_new.  A second call with
+    //   the same proof fails the "C_old mismatch" check because the on-chain state
+    //   has already advanced.
+    // -----------------------------------------------------------------------
+
+    /// @notice Batch-claim up to 50 ShieldedInbox notes by proving a single Groth16 proof.
+    /// @param publicInputs  [C_old_x, C_old_y, C_new_x, C_new_y, C_consumed_x, C_consumed_y]
+    /// @param proof         Groth16 proof packed as [pA[2], pB[4], pC[2]] (snarkjs flat format).
+    function claimBatch(
+        uint256[6] calldata publicInputs,
+        uint256[8] calldata proof
+    ) external {
+        require(
+            address(batchClaimVerifier) != address(0),
+            "JanusToken: batchClaimVerifier not set"
+        );
+
+        // 1. Verify the Groth16 proof against the deployed verifier (pot22 ceremony).
+        require(
+            batchClaimVerifier.verifyProof(
+                [proof[0], proof[1]],
+                [[proof[2], proof[3]], [proof[4], proof[5]]],
+                [proof[6], proof[7]],
+                publicInputs
+            ),
+            "JanusToken: invalid batch proof"
+        );
+
+        // 2. Verify C_old matches the caller's current on-chain commitment.
+        //    This prevents replaying the same proof after state has advanced
+        //    and ensures the prover proved knowledge of the correct current balance.
+        Point memory current = _effectiveCommitment(msg.sender);
+        require(
+            current.x == publicInputs[0] && current.y == publicInputs[1],
+            "JanusToken: C_old mismatch with stored commit"
+        );
+
+        // 3. Update the commitment to C_new (the post-claim balance commitment).
+        commitments[msg.sender] = Point({ x: publicInputs[2], y: publicInputs[3] });
+
+        emit BatchClaimed(msg.sender, publicInputs[2], publicInputs[3]);
+
+        // NOTE(v0.8 testnet): inbox notes are NOT marked consumed here.
+        // See comment block above for the full trust model and mainnet roadmap.
     }
 
     // -----------------------------------------------------------------------

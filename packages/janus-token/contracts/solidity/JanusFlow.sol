@@ -6,14 +6,14 @@
 // Uses 2-generator Pedersen aggregate commitment for homomorphic accumulation.
 // Integrates ShieldedInbox for atomic note delivery on shieldedTransfer (v0.8.0).
 
-pragma solidity 0.8.20;
+pragma solidity ^0.8.20;
 
 import {JanusToken} from "./JanusToken.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract JanusFlow is JanusToken {
     uint256 public constant MAX_WRAP = type(uint128).max;
-    string  public constant VERSION  = "0.8.0";
+    string  public constant VERSION  = "0.8.1";
 
     // -----------------------------------------------------------------------
     // Initializer — for new proxies
@@ -28,6 +28,8 @@ contract JanusFlow is JanusToken {
     /// @param _pedersen2Gen             2-generator Pedersen commitment library.
     /// @param _inboxAddress             ShieldedInbox contract for atomic note delivery.
     ///                                  May be address(0) to deploy without inbox.
+    /// @param _batchClaimVerifier       ConfidentialClaimBatchVerifier (pot22) for claimBatch().
+    ///                                  May be address(0) — set later via setBatchClaimVerifier().
     function initialize(
         address _babyJub,
         address _transferVerifier,
@@ -35,7 +37,8 @@ contract JanusFlow is JanusToken {
         address _owner,
         address _memoRegistry,
         address _pedersen2Gen,
-        address _inboxAddress
+        address _inboxAddress,
+        address _batchClaimVerifier
     ) external initializer {
         __JanusToken_init(
             _babyJub,
@@ -44,7 +47,8 @@ contract JanusFlow is JanusToken {
             _owner,
             _memoRegistry,
             _pedersen2Gen,
-            _inboxAddress
+            _inboxAddress,
+            _batchClaimVerifier
         );
     }
 
