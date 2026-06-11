@@ -1,6 +1,7 @@
 {
   "version": "0.8.2",
-  "date": "2026-06-10",
+  "date": "2026-06-11",
+  "notes": "EVM ShieldedCheckpoint upgraded to per-token (0x88C9fD443BC15d1Cd24bc724DB6928D3246b2E26). Cadence ShieldedCheckpoint per-token deferred — validator rejected resource field addition; JanusFT/Cadence side still uses singleton until governance path opens for contract removal.",
   "chainId": 545,
   "network": "flow-evm-testnet",
   "account": {
@@ -13,7 +14,8 @@
     "mockUsdc": "0xd49Ff950279841aaEcf642E85C3a0bBc1FB4B524",
     "memoKeyRegistry": "0x361bD4d037838A3a9c5408AE465d36077800ee6c",
     "shieldedInbox": "0x0C787AAcbA9a116EdA4ec05Be41D8474D470bfC6",
-    "shieldedCheckpoint": "0xbF8dbE133FC1319570dBe43E32BFD9a6D64E1E76",
+    "shieldedCheckpoint": "0x88C9fD443BC15d1Cd24bc724DB6928D3246b2E26",
+    "shieldedCheckpoint_archive_singleton": "0xbF8dbE133FC1319570dBe43E32BFD9a6D64E1E76",
     "verifiers": {
       "confidentialTransferAggregate": "0x38e69fE7Ba7c2C586d64DFFc14742641A675666c",
       "amountDiscloseAggregate": "0xf7B634D41259D0613345633eE1CD193A030A6329",

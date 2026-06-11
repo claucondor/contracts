@@ -1,5 +1,22 @@
 # Deployments
 
+## v0.8.2 — ShieldedCheckpoint per-token (2026-06-11)
+
+**Context:** Sprint `docs/v0.8.2-MULTITOKEN-FIX.md` — singleton ShieldedCheckpoint (one snapshot per user) was overwriting state when the user wrapped a second token. Fix introduces per-token mapping `(user, token) → Checkpoint` on the EVM side. Cadence side is deferred to v0.8.3 (governance request needed to remove + re-deploy at `0x4b6bc58bc8bf5dcc`).
+
+| Component | Address | Notes |
+|-----------|---------|-------|
+| `ShieldedCheckpoint` (EVM) — per-token | `0x88C9fD443BC15d1Cd24bc724DB6928D3246b2E26` | NEW · deploy tx `f17bec31a78c8c2d39df52f8dbe188b5d7c45c9e294f5edc30390960c4bb6955` |
+| `ShieldedCheckpoint` (EVM) — singleton (archived) | `0xbF8dbE133FC1319570dBe43E32BFD9a6D64E1E76` | OLD · do not use for new writes |
+| `ShieldedCheckpoint` (Cadence) — singleton (still in use) | `0x4b6bc58bc8bf5dcc` | UNCHANGED · per-token upgrade blocked by validator (new field `slots` in `Checkpoint` resource); JanusFT/MockFT remains coupled to singleton |
+
+**Migration impact:**
+- SDK + front must point to new EVM address and pass token (proxy address) when calling `update / read / metadata`
+- JanusFlow EVM `0xA64340…1Ad3` and JanusERC20 EVM `0xFD8F…5387d` continue at same proxies — they don't reference the checkpoint contract, callers do
+- MockFT (Cadence FT) shielded balance still subject to singleton overwrite — flag as known limitation in front demo
+
+---
+
 ## JanusToken — Flow EVM testnet (chainId 545) — v0.2.0 CURRENT
 
 Trusted setup: Hermez pot14 (200+ contributors) + Flow VRF beacon
