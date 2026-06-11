@@ -1,10 +1,14 @@
 /// update_checkpoint.cdc
 ///
-/// Owner-only transaction: overwrites the signer's ShieldedCheckpoint with a new
-/// encrypted snapshot and cursor position.
+/// Owner-only transaction: writes or overwrites the signer's ShieldedCheckpoint for a
+/// specific token slot with a new encrypted snapshot and cursor position.
 ///
 /// Parameters
 /// ----------
+/// token                - String key for the token slot (e.g. "0x" + 40-char EVM address
+///                        lowercase, or "0x" + 16-char Cadence address).  No validation
+///                        performed — plain string key.  Writing to one token slot does
+///                        NOT affect any other token slot.
 /// encryptedSnapshot    - Opaque encrypted state blob (max 16384 bytes).
 ///                        Empty bytes are valid — signals a cleared state.
 /// ephPubkeyX           - X-coordinate of the ECIES ephemeral public key used to
@@ -20,6 +24,7 @@
 import ShieldedCheckpoint from "../contracts/cadence/ShieldedCheckpoint.cdc"
 
 transaction(
+    token:                 String,
     encryptedSnapshot:     [UInt8],
     ephPubkeyX:            UInt256,
     ephPubkeyY:            UInt256,
@@ -31,6 +36,7 @@ transaction(
         ) ?? panic("ShieldedCheckpoint: not installed — run install_checkpoint first")
 
         cp.update(
+            token:                 token,
             encryptedSnapshot:     encryptedSnapshot,
             ephPubkeyX:            ephPubkeyX,
             ephPubkeyY:            ephPubkeyY,

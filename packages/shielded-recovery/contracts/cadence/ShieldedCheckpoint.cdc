@@ -1,10 +1,10 @@
-/// ShieldedCheckpoint — per-user encrypted state checkpoint for the Janus protocol.
+/// ShieldedCheckpoint — per-user, per-token encrypted state checkpoint for the Janus protocol.
 ///
 /// Semantics
 /// ---------
 /// - The checkpoint owner holds an auth(Owner) &Checkpoint reference for full read+write.
 /// - Anyone can borrow a &{Metadata} capability at /public/shieldedCheckpoint to read
-///   non-sensitive metadata (version, lastConsumedNoteIndex, lastUpdatedBlock).
+///   non-sensitive per-token metadata (version, lastConsumedNoteIndex, lastUpdatedBlock).
 /// - Content-agnostic: encryptedSnapshot is opaque [UInt8]. Applications define their
 ///   own payload schema on top.
 /// - Stores cursor (lastConsumedNoteIndex) to track how many ShieldedInbox notes have
@@ -12,12 +12,26 @@
 /// - Cursor monotonicity is NOT enforced — applications may rewind for rescans.
 /// - Empty snapshot ([]) is valid — useful to signal a cleared or initialised state.
 ///
+/// Per-token model
+/// ---------------
+/// Each (user, token) pair is an independent slot inside the Checkpoint resource.
+/// The token key is a String, typically "0x" + 40 hex chars (lowercase) for EVM tokens,
+/// or "0x" + 16 hex chars for Cadence addresses. No validation is performed on the key.
+/// Writing to one token slot does NOT affect any other token slot.
+/// Calling read(token:) for an unwritten slot returns nil instead of panicking.
+///
 /// Resource model
 /// --------------
 /// Users call ShieldedCheckpoint.createCheckpoint(owner:) to obtain a @Checkpoint,
 /// save it to /storage/shieldedCheckpoint, and publish a &{Metadata} capability at
 /// /public/shieldedCheckpoint.  Only the resource owner (via auth(Owner) borrow from
 /// their own storage) can call update() or read().
+///
+/// Upgrade safety
+/// --------------
+/// No new contract-level fields are added. All per-token state lives inside the
+/// Checkpoint resource (inside a {String: TokenSlot} dictionary). This is safe
+/// under the Cadence upgrade validator ("no new top-level fields" rule).
 ///
 /// Design: immutable primitive — no contract upgradeability, no admin.
 
@@ -42,19 +56,20 @@ access(all) contract ShieldedCheckpoint {
 
     access(all) event CheckpointUpdated(
         owner:                 Address,
+        token:                 String,
         version:               UInt64,
         lastConsumedNoteIndex: UInt64,
         blockHeight:           UInt64
     )
 
     // -----------------------------------------------------------------------
-    // CheckpointSnapshot struct — returned by read()
+    // TokenSlot struct — internal per-token storage unit
     // -----------------------------------------------------------------------
 
-    /// Typed snapshot of all checkpoint fields.
-    /// Returned by the Owner-entitled read() call so callers get a strongly-typed
-    /// value rather than a raw {String: AnyStruct} dictionary.
-    access(all) struct CheckpointSnapshot {
+    /// Internal struct representing a single (user, token) checkpoint slot.
+    /// Lives inside the Checkpoint resource's slots dictionary.
+    /// All fields are immutable — a new TokenSlot is created on every update.
+    access(all) struct TokenSlot {
         access(all) let encryptedSnapshot:     [UInt8]
         access(all) let ephPubkeyX:            UInt256
         access(all) let ephPubkeyY:            UInt256
@@ -80,17 +95,75 @@ access(all) contract ShieldedCheckpoint {
     }
 
     // -----------------------------------------------------------------------
-    // Metadata interface — public surface (no encrypted blob)
+    // CheckpointData struct — returned by read() (includes encrypted blob)
     // -----------------------------------------------------------------------
 
-    /// Public capability type.  Exposes non-sensitive metadata; hides encrypted blob
-    /// and owner-only write/read surface.
+    /// Typed snapshot of all checkpoint fields for a given token slot.
+    /// Returned by the Owner-entitled read() call so callers get a strongly-typed
+    /// value rather than a raw {String: AnyStruct} dictionary.
+    access(all) struct CheckpointData {
+        access(all) let encryptedSnapshot:     [UInt8]
+        access(all) let ephPubkeyX:            UInt256
+        access(all) let ephPubkeyY:            UInt256
+        access(all) let lastConsumedNoteIndex: UInt64
+        access(all) let lastUpdatedBlock:      UInt64
+        access(all) let version:               UInt64
+
+        init(
+            encryptedSnapshot:     [UInt8],
+            ephPubkeyX:            UInt256,
+            ephPubkeyY:            UInt256,
+            lastConsumedNoteIndex: UInt64,
+            lastUpdatedBlock:      UInt64,
+            version:               UInt64
+        ) {
+            self.encryptedSnapshot     = encryptedSnapshot
+            self.ephPubkeyX            = ephPubkeyX
+            self.ephPubkeyY            = ephPubkeyY
+            self.lastConsumedNoteIndex = lastConsumedNoteIndex
+            self.lastUpdatedBlock      = lastUpdatedBlock
+            self.version               = version
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // CheckpointMetadata struct — returned by metadata() (no encrypted blob)
+    // -----------------------------------------------------------------------
+
+    /// Public-safe metadata for a given (user, token) slot.
+    /// Does NOT include the encrypted snapshot — safe for indexers and recovery UI.
+    access(all) struct CheckpointMetadata {
+        access(all) let lastConsumedNoteIndex: UInt64
+        access(all) let lastUpdatedBlock:      UInt64
+        access(all) let version:               UInt64
+        /// True once update() has been called at least once for this token slot.
+        access(all) let hasCheckpoint:         Bool
+
+        init(
+            lastConsumedNoteIndex: UInt64,
+            lastUpdatedBlock:      UInt64,
+            version:               UInt64,
+            hasCheckpoint:         Bool
+        ) {
+            self.lastConsumedNoteIndex = lastConsumedNoteIndex
+            self.lastUpdatedBlock      = lastUpdatedBlock
+            self.version               = version
+            self.hasCheckpoint         = hasCheckpoint
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Metadata interface — public surface (no encrypted blob, per-token)
+    // -----------------------------------------------------------------------
+
+    /// Public capability type.  Exposes non-sensitive per-token metadata.
+    /// Hides encrypted blob and owner-only write/read surface.
     access(all) resource interface Metadata {
-        access(all) view fun getLastConsumedNoteIndex(): UInt64
-        access(all) view fun getLastUpdatedBlock():      UInt64
-        access(all) view fun getVersion():               UInt64
-        /// Returns true once the owner has called update() at least once.
-        access(all) view fun exists():                   Bool
+        /// Returns public metadata for the given token slot.
+        /// Returns zero-value metadata (version=0, hasCheckpoint=false) for unwritten slots.
+        access(all) fun metadata(token: String): ShieldedCheckpoint.CheckpointMetadata
+        /// Returns true if update() has been called at least once for this token slot.
+        access(all) view fun tokenSlotExists(token: String): Bool
     }
 
     // -----------------------------------------------------------------------
@@ -99,51 +172,49 @@ access(all) contract ShieldedCheckpoint {
 
     access(all) resource Checkpoint: Metadata {
 
-        /// Opaque payload encrypted to the owner's pubkey.
-        access(self) var encryptedSnapshot:     [UInt8]
-        /// X-coordinate of the ECIES ephemeral public key used to encrypt the snapshot.
-        access(self) var ephPubkeyX:            UInt256
-        /// Y-coordinate of the ECIES ephemeral public key.
-        access(self) var ephPubkeyY:            UInt256
-        /// Cursor: how many ShieldedInbox notes have been consumed into this checkpoint.
-        access(self) var lastConsumedNoteIndex: UInt64
-        /// Block height at the time of the last update.
-        access(self) var lastUpdatedBlock:      UInt64
-        /// Monotonically increasing update counter.  Starts at 0 (no data); first update sets it to 1.
-        access(self) var version:               UInt64
+        /// Per-token slots: String key → TokenSlot value.
+        /// Key is typically "0x" + 40 hex chars (lowercase) for EVM tokens,
+        /// or "0x" + 16 hex chars for Cadence addresses. No validation performed.
+        access(self) var slots:     {String: ShieldedCheckpoint.TokenSlot}
+
         /// Owner address — stored at creation for event emission.
         /// Named ownerAddr to avoid collision with the Cadence built-in `owner` resource property.
-        access(self) let ownerAddr:             Address
+        access(self) let ownerAddr: Address
 
         init(ownerAddr: Address) {
-            self.encryptedSnapshot     = []
-            self.ephPubkeyX            = 0
-            self.ephPubkeyY            = 0
-            self.lastConsumedNoteIndex = 0
-            self.lastUpdatedBlock      = 0
-            self.version               = 0
-            self.ownerAddr             = ownerAddr
+            self.slots     = {}
+            self.ownerAddr = ownerAddr
         }
 
         // ------------------------------------------------------------------
-        // Metadata interface (public)
+        // Metadata interface (public, per-token)
         // ------------------------------------------------------------------
 
-        access(all) view fun getLastConsumedNoteIndex(): UInt64 {
-            return self.lastConsumedNoteIndex
+        /// Returns public metadata for the given token slot.
+        /// Returns zero-value metadata for unwritten or non-existent slots.
+        access(all) fun metadata(token: String): ShieldedCheckpoint.CheckpointMetadata {
+            if let slot = self.slots[token] {
+                return ShieldedCheckpoint.CheckpointMetadata(
+                    lastConsumedNoteIndex: slot.lastConsumedNoteIndex,
+                    lastUpdatedBlock:      slot.lastUpdatedBlock,
+                    version:              slot.version,
+                    hasCheckpoint:         slot.version > 0
+                )
+            }
+            return ShieldedCheckpoint.CheckpointMetadata(
+                lastConsumedNoteIndex: 0,
+                lastUpdatedBlock:      0,
+                version:               0,
+                hasCheckpoint:         false
+            )
         }
 
-        access(all) view fun getLastUpdatedBlock(): UInt64 {
-            return self.lastUpdatedBlock
-        }
-
-        access(all) view fun getVersion(): UInt64 {
-            return self.version
-        }
-
-        /// True once the owner has called update() at least once.
-        access(all) view fun exists(): Bool {
-            return self.version > 0
+        /// Returns true if update() has been called at least once for this token slot.
+        access(all) view fun tokenSlotExists(token: String): Bool {
+            if let slot = self.slots[token] {
+                return slot.version > 0
+            }
+            return false
         }
 
         // ------------------------------------------------------------------
@@ -151,14 +222,26 @@ access(all) contract ShieldedCheckpoint {
         // ------------------------------------------------------------------
 
         /**
-         * Create or overwrite this checkpoint.
+         * Create or overwrite the checkpoint for a specific token slot.
          *
-         * Validates that encryptedSnapshot does not exceed MAX_SNAPSHOT_BYTES.
-         * Increments version on every call.
-         * Cursor monotonicity is NOT enforced — apps may rewind for rescans.
-         * Empty encryptedSnapshot is accepted.
+         * token                 - String key for the token (e.g. "0x" + 40-char EVM address
+         *                         lowercase, or "0x" + 16-char Cadence address).  No
+         *                         validation performed — treated as a plain dict key.
+         *                         Zero-length string and any other string are permitted.
+         * encryptedSnapshot     - Opaque encrypted state blob (max MAX_SNAPSHOT_BYTES).
+         *                         Empty bytes are valid — useful to signal a cleared state.
+         * ephPubkeyX            - X-coordinate of the ECIES ephemeral public key used to
+         *                         encrypt the snapshot.
+         * ephPubkeyY            - Y-coordinate of the ECIES ephemeral public key.
+         * lastConsumedNoteIndex - Cursor: how many ShieldedInbox notes have been consumed
+         *                         into this checkpoint.  Monotonicity is NOT enforced;
+         *                         callers may rewind for rescans.
+         *
+         * Writing to one token slot does NOT affect any other token slot.
+         * Version is per-token-slot and increments independently.
          */
         access(Owner) fun update(
+            token:                 String,
             encryptedSnapshot:     [UInt8],
             ephPubkeyX:            UInt256,
             ephPubkeyY:            UInt256,
@@ -168,18 +251,22 @@ access(all) contract ShieldedCheckpoint {
                 panic("ShieldedCheckpoint: snapshot too large")
             }
 
-            let newVersion  = self.version + 1
-            let blockHeight = getCurrentBlock().height
+            let blockHeight:      UInt64 = getCurrentBlock().height
+            let currentVersion:   UInt64 = self.slots[token]?.version ?? 0
+            let newVersion:       UInt64 = currentVersion + 1
 
-            self.encryptedSnapshot     = encryptedSnapshot
-            self.ephPubkeyX            = ephPubkeyX
-            self.ephPubkeyY            = ephPubkeyY
-            self.lastConsumedNoteIndex = lastConsumedNoteIndex
-            self.lastUpdatedBlock      = blockHeight
-            self.version               = newVersion
+            self.slots[token] = ShieldedCheckpoint.TokenSlot(
+                encryptedSnapshot:     encryptedSnapshot,
+                ephPubkeyX:            ephPubkeyX,
+                ephPubkeyY:            ephPubkeyY,
+                lastConsumedNoteIndex: lastConsumedNoteIndex,
+                lastUpdatedBlock:      blockHeight,
+                version:               newVersion
+            )
 
             emit ShieldedCheckpoint.CheckpointUpdated(
                 owner:                 self.ownerAddr,
+                token:                 token,
                 version:               newVersion,
                 lastConsumedNoteIndex: lastConsumedNoteIndex,
                 blockHeight:           blockHeight
@@ -191,30 +278,33 @@ access(all) contract ShieldedCheckpoint {
         // ------------------------------------------------------------------
 
         /**
-         * Read the full checkpoint including the encrypted snapshot.
+         * Read the full checkpoint for a specific token slot including the encrypted blob.
+         *
+         * Returns nil if update() has never been called for this token slot.
          *
          * Scoped to Owner entitlement by design: the encrypted blob should not be
          * readable via a public capability even though it is encrypted, to prevent
          * correlation attacks.
          *
-         * Non-view: struct construction (CheckpointSnapshot init) is impure in
-         * Cadence view context (initializers assign to self).  There are no side
-         * effects on stored state; the non-view designation is a type-system artifact.
-         *
-         * Panics if no update() has been called yet (version == 0).
+         * Non-view: struct construction in Cadence view context can conflict with
+         * [UInt8] array initialization in some Cadence versions; no side effects
+         * on stored state.
          */
-        access(Owner) fun read(): ShieldedCheckpoint.CheckpointSnapshot {
-            if self.version == 0 {
-                panic("ShieldedCheckpoint: no checkpoint data — call update() first")
+        access(Owner) fun read(token: String): ShieldedCheckpoint.CheckpointData? {
+            if let slot = self.slots[token] {
+                if slot.version == 0 {
+                    return nil
+                }
+                return ShieldedCheckpoint.CheckpointData(
+                    encryptedSnapshot:     slot.encryptedSnapshot,
+                    ephPubkeyX:            slot.ephPubkeyX,
+                    ephPubkeyY:            slot.ephPubkeyY,
+                    lastConsumedNoteIndex: slot.lastConsumedNoteIndex,
+                    lastUpdatedBlock:      slot.lastUpdatedBlock,
+                    version:               slot.version
+                )
             }
-            return ShieldedCheckpoint.CheckpointSnapshot(
-                encryptedSnapshot:     self.encryptedSnapshot,
-                ephPubkeyX:            self.ephPubkeyX,
-                ephPubkeyY:            self.ephPubkeyY,
-                lastConsumedNoteIndex: self.lastConsumedNoteIndex,
-                lastUpdatedBlock:      self.lastUpdatedBlock,
-                version:               self.version
-            )
+            return nil
         }
     }
 
