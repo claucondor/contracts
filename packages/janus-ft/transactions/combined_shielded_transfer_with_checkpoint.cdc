@@ -25,6 +25,8 @@
 //   ephPubToX/Y     Ephemeral BabyJub pubkey for recipient note ECDH
 //
 // Args (sender checkpoint):
+//   checkpointToken        String key for the token slot (e.g. "0x" + 16-char Cadence address for
+//                          JanusFT, or "0x" + 40-char lowercase hex for an EVM token).
 //   checkpointSnapshot     [UInt8] ECIES-encrypted snapshot of sender's new balance state
 //   checkpointEphPubX/Y    Ephemeral BabyJub pubkey used to encrypt the snapshot
 //   lastConsumedNoteIndex  Cursor: how many of the sender's inbox notes are consumed
@@ -41,6 +43,7 @@ transaction(
     encryptedNoteTo:        [UInt8],
     ephPubToX:              UInt256,
     ephPubToY:              UInt256,
+    checkpointToken:        String,
     checkpointSnapshot:     [UInt8],
     checkpointEphPubX:      UInt256,
     checkpointEphPubY:      UInt256,
@@ -82,7 +85,10 @@ transaction(
         // ── 2. Sender checkpoint update (records new encrypted state) ───────────
         // This updates the sender's ShieldedCheckpoint with the post-transfer
         // encrypted snapshot.  Atomic with the transfer: both commit or both revert.
+        // checkpointToken identifies the per-token slot — caller passes the JanusFT
+        // Cadence address string (e.g. "0x" + 16-char address) or EVM token address.
         self.checkpoint.update(
+            token:                 checkpointToken,
             encryptedSnapshot:     checkpointSnapshot,
             ephPubkeyX:            checkpointEphPubX,
             ephPubkeyY:            checkpointEphPubY,
