@@ -474,21 +474,25 @@ describe("JanusFlow v0.8.0 — ShieldedInbox integration (full ECIES decode)", f
 
     const cursor = 4n; // consumed 4 inbox notes (3 to Bob + 1 to Carol, conceptual)
 
+    // Per-token API: pass JanusFlow proxy address as the token key.
+    const janusFlowAddr = await janusFlow.getAddress();
+
     await checkpoint.connect(alice).update(
+      janusFlowAddr,
       "0x" + cpCt.toString("hex"),
       cpEph.x,
       cpEph.y,
       cursor
     );
 
-    const [lci, lub, ver, has] = await checkpoint.metadata(alice.address);
+    const [lci, lub, ver, has] = await checkpoint.metadata(alice.address, janusFlowAddr);
     expect(ver).to.equal(1n, "version should be 1 after first update");
     expect(lci).to.equal(cursor, "lastConsumedNoteIndex should equal cursor");
     expect(has).to.be.true;
     expect(lub).to.be.gt(0n);
 
     // Alice reads back her own checkpoint and decodes it
-    const cp = await checkpoint.connect(alice).read();
+    const cp = await checkpoint.connect(alice).read(janusFlowAddr);
     const decoded = await decryptNote(
       Buffer.from(cp.encryptedSnapshot.slice(2), "hex"),
       { x: cp.ephPubkeyX, y: cp.ephPubkeyY },
