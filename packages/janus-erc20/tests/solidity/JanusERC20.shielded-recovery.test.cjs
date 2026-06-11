@@ -526,21 +526,25 @@ describe("JanusERC20 v0.8.0 — ShieldedInbox integration (full ECIES decode)", 
 
     const cursor = 4n; // conceptual: Alice consumed 4 inbox notes in this session
 
+    // Per-token API: pass JanusERC20 proxy address as the token key.
+    const janusERC20Addr = await janusERC20.getAddress();
+
     await checkpoint.connect(alice).update(
+      janusERC20Addr,
       "0x" + cpCt.toString("hex"),
       cpEph.x,
       cpEph.y,
       cursor
     );
 
-    const [lci, lub, ver, has] = await checkpoint.metadata(alice.address);
+    const [lci, lub, ver, has] = await checkpoint.metadata(alice.address, janusERC20Addr);
     expect(ver).to.equal(1n,    "version should be 1 after first update");
     expect(lci).to.equal(cursor, "lastConsumedNoteIndex should equal cursor");
     expect(has).to.be.true;
     expect(lub).to.be.gt(0n);
 
     // Alice reads back and decodes
-    const cp = await checkpoint.connect(alice).read();
+    const cp = await checkpoint.connect(alice).read(janusERC20Addr);
     const decoded = await decryptNote(
       Buffer.from(cp.encryptedSnapshot.slice(2), "hex"),
       { x: cp.ephPubkeyX, y: cp.ephPubkeyY },
