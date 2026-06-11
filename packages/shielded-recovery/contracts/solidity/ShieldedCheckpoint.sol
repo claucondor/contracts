@@ -3,20 +3,26 @@ pragma solidity 0.8.20;
 
 /**
  * @title ShieldedCheckpoint
- * @notice Per-user encrypted state checkpoint for the Janus protocol.
+ * @notice Per-user, per-token encrypted state checkpoint for the Janus protocol.
  *
  * Semantics:
- *   - Only the checkpoint owner (msg.sender) can write/overwrite their checkpoint.
- *   - Only the owner can read the full encrypted blob via read() — scoped to msg.sender
- *     for privacy (the blob is encrypted to owner's pubkey, but exposing it to anyone
- *     would signal a correlation attack vector).
- *   - Public metadata (lastConsumedNoteIndex, lastUpdatedBlock, version) is readable by
- *     anyone via metadata(address) — safe for indexers and recovery orchestration.
+ *   - Only the checkpoint owner (msg.sender) can write/overwrite their checkpoint
+ *     for a given (user, token) slot.
+ *   - Only the owner can read the full encrypted blob via read(token) — scoped to
+ *     msg.sender for privacy (the blob is encrypted to owner's pubkey, but exposing
+ *     it to anyone would signal a correlation attack vector).
+ *   - Public metadata (lastConsumedNoteIndex, lastUpdatedBlock, version) is readable
+ *     by anyone via metadata(address, address) — safe for indexers and recovery UI.
  *   - The contract is content-agnostic: encryptedSnapshot is opaque bytes.
- *   - Stores cursor (lastConsumedNoteIndex) to track how many ShieldedInbox notes the
- *     user has consumed into this checkpoint, enabling resume on partial drains.
+ *   - Stores cursor (lastConsumedNoteIndex) to track how many ShieldedInbox notes
+ *     the user has consumed into this checkpoint, enabling resume on partial drains.
  *   - Cursor monotonicity is NOT enforced — applications may rewind for rescans.
  *   - Empty snapshot (zero bytes) is valid — applications may use it to clear state.
+ *   - Each (user, token) pair has an independent checkpoint slot. Writing to one
+ *     token does NOT affect any other token's checkpoint for the same user.
+ *   - `token` is stored as a plain address key; no validation is performed.
+ *     Callers typically pass address(this) from JanusFlow / JanusERC20 / a router.
+ *     Zero address is permitted — it is just a key.
  *
  * Design: immutable primitive — no upgradability, no owner, no pause.
  */
@@ -39,7 +45,8 @@ contract ShieldedCheckpoint {
     // Storage
     // -----------------------------------------------------------------------
 
-    mapping(address => Checkpoint) private _checkpoints;
+    /// @dev user → token → Checkpoint.  Each (user, token) pair is an independent slot.
+    mapping(address => mapping(address => Checkpoint)) private _checkpoints;
 
     // -----------------------------------------------------------------------
     // Constants
@@ -55,6 +62,7 @@ contract ShieldedCheckpoint {
     /// @notice Emitted on every successful update.
     event CheckpointUpdated(
         address indexed owner,
+        address indexed token,
         uint64          version,
         uint64          lastConsumedNoteIndex,
         uint64          blockNumber
@@ -65,15 +73,19 @@ contract ShieldedCheckpoint {
     // -----------------------------------------------------------------------
 
     error SnapshotTooLarge();
-    error NoCheckpoint();
+    error NoCheckpoint(address user, address token);
 
     // -----------------------------------------------------------------------
     // External — write
     // -----------------------------------------------------------------------
 
     /**
-     * @notice Create or overwrite the caller's checkpoint.
+     * @notice Create or overwrite the caller's checkpoint for a specific token slot.
      *
+     * @param token              Address used as the per-token key (e.g. address(this)
+     *                           from JanusFlow / JanusERC20 / a router).  Zero address
+     *                           is permitted — it is treated as a plain key.  No
+     *                           validation is performed; the contract is permissionless.
      * @param encryptedSnapshot  Opaque encrypted state blob (max MAX_SNAPSHOT_BYTES).
      *                           Empty bytes are valid — useful to signal a cleared state.
      * @param ephPubkeyX         X-coordinate of the ECIES ephemeral public key used to
@@ -84,6 +96,7 @@ contract ShieldedCheckpoint {
      *                               enforced; callers may rewind for rescans.
      */
     function update(
+        address        token,
         bytes calldata encryptedSnapshot,
         uint256        ephPubkeyX,
         uint256        ephPubkeyY,
@@ -91,7 +104,7 @@ contract ShieldedCheckpoint {
     ) external {
         if (encryptedSnapshot.length > MAX_SNAPSHOT_BYTES) revert SnapshotTooLarge();
 
-        Checkpoint storage cp = _checkpoints[msg.sender];
+        Checkpoint storage cp = _checkpoints[msg.sender][token];
         uint64 newVersion = cp.version + 1;
 
         cp.encryptedSnapshot     = encryptedSnapshot;
@@ -101,7 +114,7 @@ contract ShieldedCheckpoint {
         cp.lastUpdatedBlock      = uint64(block.number);
         cp.version               = newVersion;
 
-        emit CheckpointUpdated(msg.sender, newVersion, lastConsumedNoteIndex, uint64(block.number));
+        emit CheckpointUpdated(msg.sender, token, newVersion, lastConsumedNoteIndex, uint64(block.number));
     }
 
     // -----------------------------------------------------------------------
@@ -109,18 +122,21 @@ contract ShieldedCheckpoint {
     // -----------------------------------------------------------------------
 
     /**
-     * @notice Read the caller's own full checkpoint (includes encrypted blob).
+     * @notice Read the caller's own full checkpoint for a specific token slot
+     *         (includes encrypted blob).
      *
      * Scoped to msg.sender by design: the encrypted blob should not be exposed to
      * arbitrary callers even though it is encrypted — doing so leaks correlation signals.
      *
-     * @return cp  Full Checkpoint struct including encryptedSnapshot.
+     * @param token  Address of the token slot to read.
+     * @return cp    Full Checkpoint struct including encryptedSnapshot.
      *
-     * Reverts NoCheckpoint if the caller has never called update().
+     * Reverts NoCheckpoint(msg.sender, token) if the caller has never called update()
+     * for this token slot.
      */
-    function read() external view returns (Checkpoint memory cp) {
-        cp = _checkpoints[msg.sender];
-        if (cp.version == 0) revert NoCheckpoint();
+    function read(address token) external view returns (Checkpoint memory cp) {
+        cp = _checkpoints[msg.sender][token];
+        if (cp.version == 0) revert NoCheckpoint(msg.sender, token);
     }
 
     // -----------------------------------------------------------------------
@@ -128,29 +144,33 @@ contract ShieldedCheckpoint {
     // -----------------------------------------------------------------------
 
     /**
-     * @notice Read non-sensitive metadata for any user.  Does NOT include the
-     *         encrypted snapshot.  Safe for indexers, relayers, and recovery UI.
+     * @notice Read non-sensitive metadata for any (user, token) pair.  Does NOT
+     *         include the encrypted snapshot.  Safe for indexers, relayers, and
+     *         recovery UI.
      *
-     * @param user  Address whose metadata to read.
+     * @param user   Address whose metadata to read.
+     * @param token  Address of the token slot to read metadata for.
      * @return lastConsumedNoteIndex  Cursor value from the last update.
      * @return lastUpdatedBlock       Block number of the last update (0 if none).
      * @return version                Update counter (0 if no checkpoint exists).
-     * @return hasCheckpoint          True if the user has at least one checkpoint update.
+     * @return hasCheckpoint          True if the (user, token) pair has at least one
+     *                                checkpoint update.
      */
-    function metadata(address user) external view returns (
+    function metadata(address user, address token) external view returns (
         uint64 lastConsumedNoteIndex,
         uint64 lastUpdatedBlock,
         uint64 version,
         bool   hasCheckpoint
     ) {
-        Checkpoint storage cp = _checkpoints[user];
+        Checkpoint storage cp = _checkpoints[user][token];
         return (cp.lastConsumedNoteIndex, cp.lastUpdatedBlock, cp.version, cp.version > 0);
     }
 
     /**
-     * @notice Cheap existence check.  True once the user has called update() at least once.
+     * @notice Cheap existence check.  True once the (user, token) pair has called
+     *         update() at least once.
      */
-    function exists(address user) external view returns (bool) {
-        return _checkpoints[user].version > 0;
+    function exists(address user, address token) external view returns (bool) {
+        return _checkpoints[user][token].version > 0;
     }
 }
