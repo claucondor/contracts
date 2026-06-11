@@ -1,6 +1,6 @@
 {
-  "version": "0.8.1",
-  "date": "2026-06-09",
+  "version": "0.8.2",
+  "date": "2026-06-10",
   "chainId": 545,
   "network": "flow-evm-testnet",
   "account": {
@@ -17,19 +17,20 @@
     "verifiers": {
       "confidentialTransferAggregate": "0x38e69fE7Ba7c2C586d64DFFc14742641A675666c",
       "amountDiscloseAggregate": "0xf7B634D41259D0613345633eE1CD193A030A6329",
-      "confidentialClaimBatch": "0x2FBf6baef1D70f5A9aFF2602c934Bd62dcf6Df80"
+      "confidentialClaimBatch": "0x66f25B8f2e7ABFA97ff6446aEAfE5c5D3b1c8d2f",
+      "confidentialClaimBatch_n50_archive": "0x2FBf6baef1D70f5A9aFF2602c934Bd62dcf6Df80"
     },
     "janusFlow": {
       "impl": "0x0B58E597735f56F870Bd0a00E0522307E41Ac25C",
       "implPrev": "0x3bC0EAa6A5737eE8891C77e4E6bD668A223096dF",
       "proxy": "0xA64340C1d356835A2450306Ffd290Ed52c001Ad3",
-      "batchClaimVerifier": "0x2FBf6baef1D70f5A9aFF2602c934Bd62dcf6Df80"
+      "batchClaimVerifier": "0x66f25B8f2e7ABFA97ff6446aEAfE5c5D3b1c8d2f"
     },
     "janusErc20": {
       "impl": "0x2E51106e2B6BbF2eF0b4B252a76790aba5bfa6Df",
       "implPrev": "0x8497FAE43B14e6b4119e3dcBd40835B9F812048E",
       "proxy": "0xFD8F82bE1782AF1F85f4673065e94fb3F8D5387d",
-      "batchClaimVerifier": "0x2FBf6baef1D70f5A9aFF2602c934Bd62dcf6Df80"
+      "batchClaimVerifier": "0x66f25B8f2e7ABFA97ff6446aEAfE5c5D3b1c8d2f"
     }
   },
   "cadence": {
@@ -51,7 +52,8 @@
       "janusFT": "8abc14ed3ae48b58671a863f7f1cd0099a5060219f2f2f336ff29e8953907cfe"
     },
     "cadenceUpdates": {
-      "janusFT_v081_claimBatch": "71da1a3adf8a948e84089bf1b979abd48c098df6fee32e37ab2b672a429336b0"
+      "janusFT_v081_claimBatch": "71da1a3adf8a948e84089bf1b979abd48c098df6fee32e37ab2b672a429336b0",
+      "janusFT_v082_batchN10": "61ab4905a33be71ce7ef74409fb6ea3249f4349a7b25ace004396ed197017815"
     },
     "evmDeploys": {
       "babyJub": "0x10fbc98f941e04a5eb3d11ae090dfdcefb290bc9036968ef3a1bd8fc2540c340",
@@ -83,21 +85,36 @@
         "cadenceTx": "a3c09e99328acbd7250730cfdfc1d68cfe34315e6f8f79697f5c67f4776a7268",
         "evmTx": "0x619d7da50896233b4620038f67a79e4200ea47d13150baaf5bf137b8e08abdf8"
       }
+    },
+    "v082Upgrades": {
+      "ccbVerifierN10Deploy": {
+        "cadenceTx": "278c9f4329e26ca65756688d5ff7cf544435c6146f10c2d8ab586fc2c756984c",
+        "note": "ConfidentialClaimBatchVerifier N=10 deployed via COA"
+      },
+      "janusFlowSetBatchClaimVerifier": {
+        "cadenceTx": "98efabdaf76cac16db85c3cef06472fa8a6a52e703f39d261922c7f0584a62db",
+        "evmTx": "0x84b1502ed9da3fab6aff2d298d2e8e7a4bbba9a4da526f348e7bb1f568bf7a94"
+      },
+      "janusErc20SetBatchClaimVerifier": {
+        "cadenceTx": "ba5d33313a0fcf0474001a134880508f43f73e9f99e2926fd6da292ae2c7b4e6",
+        "evmTx": "0x5ecb179f6a413636df9b2b4e8c56110d31bd057a0ae45ae8c98fce06ea47b0d8"
+      },
+      "janusFT_cadenceUpdate": "61ab4905a33be71ce7ef74409fb6ea3249f4349a7b25ace004396ed197017815"
     }
   },
   "smokeCheck": {
     "mockUsdcName": "Mock USD Coin",
     "mockUsdcSymbol": "mUSDC",
     "mockUsdcDecimals": 6,
-    "janusFlowVersion": "0.8.1",
+    "janusFlowVersion": "0.8.2",
     "janusFlowOwner": "0x0000000000000000000000020885D7AD3582356a",
     "janusFlowShieldedInbox": "0x0C787AAcbA9a116EdA4ec05Be41D8474D470bfC6",
-    "janusFlowBatchClaimVerifier": "0x2FBf6baef1D70f5A9aFF2602c934Bd62dcf6Df80",
-    "janusErc20Version": "0.8.1",
+    "janusFlowBatchClaimVerifier": "0x66f25B8f2e7ABFA97ff6446aEAfE5c5D3b1c8d2f",
+    "janusErc20Version": "0.8.2",
     "janusErc20Owner": "0x0000000000000000000000020885D7AD3582356a",
     "janusErc20Underlying": "0xd49Ff950279841aaEcf642E85C3a0bBc1FB4B524",
     "janusErc20ShieldedInbox": "0x0C787AAcbA9a116EdA4ec05Be41D8474D470bfC6",
-    "janusErc20BatchClaimVerifier": "0x2FBf6baef1D70f5A9aFF2602c934Bd62dcf6Df80",
+    "janusErc20BatchClaimVerifier": "0x66f25B8f2e7ABFA97ff6446aEAfE5c5D3b1c8d2f",
     "cadenceContracts": ["JanusFT", "MockFT", "ShieldedCheckpoint", "ShieldedInbox"],
     "allVerified": true
   },
