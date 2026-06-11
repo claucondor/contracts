@@ -21,7 +21,7 @@
     "ShieldedCheckpoint": {
       "source": "../../packages/shielded-recovery/contracts/cadence/ShieldedCheckpoint.cdc",
       "aliases": {
-        "testnet": "4b6bc58bc8bf5dcc"
+        "testnet": "d1a02aa46d9151bb"
       }
     },
     "JanusFlow": {

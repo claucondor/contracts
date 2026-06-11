@@ -4,33 +4,55 @@
 /// to the signer's storage, then publishes a public &{ShieldedCheckpoint.Metadata}
 /// capability so that indexers and recovery tools can read non-sensitive metadata.
 ///
-/// The encrypted snapshot itself is never exposed through the public capability.
-/// Only the owner (via auth(Owner) borrow from their own storage) can read the blob
-/// or write updates.
+/// Migration-safe: if the path holds a stale resource from a previous deploy
+/// (different contract address → different type identifier), the load+destroy
+/// step clears it before saving the fresh checkpoint. This unblocks users who
+/// installed against the old singleton contract at 0x4b6bc58bc8bf5dcc.
 ///
-/// Safe to run multiple times: returns early if the checkpoint is already installed.
+/// The encrypted snapshot itself is never exposed through the public capability.
+/// Only the owner can read the blob or write updates.
 
 import ShieldedCheckpoint from "../contracts/cadence/ShieldedCheckpoint.cdc"
 
 transaction {
-    prepare(signer: auth(SaveValue, BorrowValue, StorageCapabilities, PublishCapability) &Account) {
+    prepare(
+        signer: auth(
+            BorrowValue,
+            SaveValue,
+            LoadValue,
+            IssueStorageCapabilityController,
+            PublishCapability,
+            UnpublishCapability
+        ) &Account
+    ) {
+        let storagePath = /storage/shieldedCheckpoint
+        let publicPath  = /public/shieldedCheckpoint
 
-        // Idempotent guard — skip if already installed.
-        if signer.storage.borrow<&ShieldedCheckpoint.Checkpoint>(
-            from: /storage/shieldedCheckpoint
-        ) != nil {
+        let storedType = signer.storage.type(at: storagePath)
+
+        // Already installed as the CURRENT contract type → just re-publish capability.
+        if storedType == Type<@ShieldedCheckpoint.Checkpoint>() {
+            signer.capabilities.unpublish(publicPath)
+            let cap = signer.capabilities.storage.issue<&{ShieldedCheckpoint.Metadata}>(storagePath)
+            signer.capabilities.publish(cap, at: publicPath)
             return
         }
 
-        // Create a fresh checkpoint owned by this account.
-        let cp <- ShieldedCheckpoint.createCheckpoint(owner: signer.address)
-        signer.storage.save(<-cp, to: /storage/shieldedCheckpoint)
+        // Migration: a stale resource (different contract type) sits at the path.
+        // Load as AnyResource (won't match concrete type) and destroy.
+        if storedType != nil {
+            let stale <- signer.storage.load<@AnyResource>(from: storagePath)
+                ?? panic("install_checkpoint: stale resource vanished")
+            destroy stale
+        }
 
-        // Publish a metadata-only public capability.
-        // Callers borrowing &{ShieldedCheckpoint.Metadata} can read version,
-        // lastConsumedNoteIndex, and lastUpdatedBlock — but NOT the encrypted blob.
-        let metaCap = signer.capabilities.storage
-            .issue<&{ShieldedCheckpoint.Metadata}>(/storage/shieldedCheckpoint)
-        signer.capabilities.publish(metaCap, at: /public/shieldedCheckpoint)
+        // Create + save fresh checkpoint resource (NEW contract type).
+        let cp <- ShieldedCheckpoint.createCheckpoint(owner: signer.address)
+        signer.storage.save(<- cp, to: storagePath)
+
+        // Re-publish metadata capability.
+        signer.capabilities.unpublish(publicPath)
+        let cap = signer.capabilities.storage.issue<&{ShieldedCheckpoint.Metadata}>(storagePath)
+        signer.capabilities.publish(cap, at: publicPath)
     }
 }
