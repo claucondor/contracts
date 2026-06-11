@@ -2,10 +2,15 @@
 //
 // This is the PRODUCTION contract — no stubs, real BabyJub cross-VM, real Groth16 ZK.
 //
+// UPGRADE NOTES (v0.8.1 → v0.8.2 batchN10):
+//   v0.8.2 rewires BATCH_CLAIM_VERIFIER_ADDR() to the N=10 ceremony verifier.
+//   Verifier: ConfidentialClaimBatchVerifier.sol at 0x66f25B8f2e7ABFA97ff6446aEAfE5c5D3b1c8d2f
+//   Circuit:  pot22 ceremony, N=10 notes max per batch (was N=50; reduced for Vercel 60s limit).
+//
 // UPGRADE NOTES (v0.8.0 → v0.8.1 claimBatch):
 //   v0.8.1 adds claimBatch — aggregate multiple ShieldedInbox notes into the caller's
 //   running commitment in a single Groth16-verified cross-VM call.
-//   Verifier: ConfidentialClaimBatchVerifier.sol at 0x2FBf6baef1D70f5A9aFF2602c934Bd62dcf6Df80
+//   Old verifier (N=50): 0x2FBf6baef1D70f5A9aFF2602c934Bd62dcf6Df80 (archived)
 //   Circuit:  pot22 ceremony, N=50 notes max per batch.
 //   Public input layout (6 signals): [C_old_x, C_old_y, C_new_x, C_new_y, C_consumed_x, C_consumed_y]
 //   TRUST ASSUMPTION: consumed notes are NOT marked on-chain in v0.8. C_old state machine
@@ -74,10 +79,10 @@ access(all) contract JanusFT {
         return "0xa80283baB7fcEFC2c75De43DB5a1cBF00E96B984"
     }
 
-    /// ConfidentialClaimBatchVerifier.sol — Groth16 claimBatch verifier (v0.8.1, pot22, N=50).
+    /// ConfidentialClaimBatchVerifier.sol — Groth16 claimBatch verifier (v0.8.2, pot22, N=10).
     /// Public input layout: [C_old_x, C_old_y, C_new_x, C_new_y, C_consumed_x, C_consumed_y]
     access(all) view fun BATCH_CLAIM_VERIFIER_ADDR(): String {
-        return "0x2FBf6baef1D70f5A9aFF2602c934Bd62dcf6Df80"
+        return "0x66f25B8f2e7ABFA97ff6446aEAfE5c5D3b1c8d2f"
     }
 
     /// BN254 field prime (= BabyJubJub base field prime)
