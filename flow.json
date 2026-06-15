@@ -1,0 +1,183 @@
+{
+	"contracts": {
+		"EVM": {
+			"source": "",
+			"aliases": {
+				"emulator": "f8d6e0586b0a20c7",
+				"mainnet": "e467b9dd11fa00df",
+				"testnet": "8c5303eaa26202d6"
+			}
+		},
+		"JanusFT": {
+			"source": "/home/oydual3/openjanus-contracts/packages/janus-ft/contracts/cadence/JanusFT.cdc",
+			"aliases": {
+				"testnet": "4b6bc58bc8bf5dcc"
+			}
+		},
+		"MockFT": {
+			"source": "/home/oydual3/openjanus-contracts/packages/janus-ft/contracts/cadence/mocks/MockFT.cdc",
+			"aliases": {
+				"testnet": "4b6bc58bc8bf5dcc"
+			}
+		},
+		"PrivateTip": {
+			"source": "./cadence/contracts/PrivateTip.cdc",
+			"aliases": {
+				"testing": "0000000000000014",
+				"testnet": "4b6bc58bc8bf5dcc"
+			}
+		},
+		"ShieldedCheckpoint": {
+			"source": "/home/oydual3/openjanus-contracts/packages/shielded-recovery/contracts/cadence/ShieldedCheckpoint.cdc",
+			"aliases": {
+				"testnet": "4b6bc58bc8bf5dcc"
+			}
+		},
+		"ShieldedInbox": {
+			"source": "/home/oydual3/openjanus-contracts/packages/shielded-recovery/contracts/cadence/ShieldedInbox.cdc",
+			"aliases": {
+				"testnet": "4b6bc58bc8bf5dcc"
+			}
+		}
+	},
+	"dependencies": {
+		"Burner": {
+			"source": "mainnet://f233dcee88fe0abe.Burner",
+			"hash": "71af18e227984cd434a3ad00bb2f3618b76482842bae920ee55662c37c8bf331",
+			"block_height": 152748584,
+			"aliases": {
+				"emulator": "f8d6e0586b0a20c7",
+				"mainnet": "f233dcee88fe0abe",
+				"testing": "0000000000000001",
+				"testnet": "9a0766d93b6608b7"
+			}
+		},
+		"FlowToken": {
+			"source": "mainnet://1654653399040a61.FlowToken",
+			"hash": "",
+			"aliases": {
+				"emulator": "0ae53cb6e3f42a79",
+				"mainnet": "1654653399040a61",
+				"testnet": "7e60df042a9c0868"
+			}
+		},
+		"FungibleToken": {
+			"source": "mainnet://f233dcee88fe0abe.FungibleToken",
+			"hash": "3b04b3191e0c5d4d9ee3ce9c671b11985d29bf2732a5721b526cc8523c536f8f",
+			"block_height": 152748584,
+			"aliases": {
+				"emulator": "ee82856bf20e2aa6",
+				"mainnet": "f233dcee88fe0abe",
+				"testing": "0000000000000002",
+				"testnet": "9a0766d93b6608b7"
+			}
+		},
+		"NonFungibleToken": {
+			"source": "mainnet://1d7e57aa55817448.NonFungibleToken",
+			"hash": "a258de1abddcdb50afc929e74aca87161d0083588f6abf2b369672e64cf4a403",
+			"block_height": 152748412,
+			"aliases": {
+				"emulator": "f8d6e0586b0a20c7",
+				"mainnet": "1d7e57aa55817448",
+				"testing": "0000000000000001",
+				"testnet": "631e88ae7f1d7c20"
+			}
+		},
+		"ViewResolver": {
+			"source": "mainnet://1d7e57aa55817448.ViewResolver",
+			"hash": "374a1994046bac9f6228b4843cb32393ef40554df9bd9907a702d098a2987bde",
+			"block_height": 152748412,
+			"aliases": {
+				"emulator": "f8d6e0586b0a20c7",
+				"mainnet": "1d7e57aa55817448",
+				"testing": "0000000000000001",
+				"testnet": "631e88ae7f1d7c20"
+			}
+		}
+	},
+	"networks": {
+		"emulator": "127.0.0.1:3569",
+		"mainnet": "access.mainnet.nodes.onflow.org:9000",
+		"testing": "127.0.0.1:3569",
+		"testnet": "access.devnet.nodes.onflow.org:9000"
+	},
+	"accounts": {
+		"emulator-account": {
+			"address": "f8d6e0586b0a20c7",
+			"key": {
+				"type": "file",
+				"location": "emulator-account.pkey"
+			}
+		},
+		"openjanus-privatetip-router": {
+			"address": "b9ac529c14a4c5a1",
+			"key": {
+				"type": "file",
+				"location": "/home/oydual3/.flow/openjanus-privatetip-router.pkey"
+			}
+		},
+		"openjanus-v08": {
+			"address": "4b6bc58bc8bf5dcc",
+			"key": {
+				"type": "file",
+				"signatureAlgorithm": "ECDSA_secp256k1",
+				"hashAlgorithm": "SHA2_256",
+				"location": "/home/oydual3/.flow/openjanus-v08.pkey"
+			}
+		},
+		"openjanus-v08-faucet": {
+			"address": "d1a02aa46d9151bb",
+			"key": {
+				"type": "file",
+				"location": "/home/oydual3/.flow/openjanus-v08-faucet.pkey"
+			}
+		},
+		"testnet-bob": {
+			"address": "d807a3992d7be612",
+			"key": {
+				"type": "file",
+				"location": "/home/oydual3/.flow/testnet-bob.pkey"
+			}
+		},
+		"testnet-charlie": {
+			"address": "3c601a443c81e6cd",
+			"key": {
+				"type": "file",
+				"location": "/home/oydual3/.flow/testnet-charlie.pkey"
+			}
+		},
+		"testnet-claucondor": {
+			"address": "7599043aea001283",
+			"key": {
+				"type": "file",
+				"signatureAlgorithm": "ECDSA_secp256k1",
+				"hashAlgorithm": "SHA2_256",
+				"location": "/home/oydual3/.flow/testnet-claucondor.pkey"
+			}
+		},
+		"testnet-dave": {
+			"address": "d32d9100e1fe983b",
+			"key": {
+				"type": "file",
+				"location": "/home/oydual3/.flow/testnet-dave.pkey"
+			}
+		},
+		"testnet-eve": {
+			"address": "374a28ddf00498e4",
+			"key": {
+				"type": "file",
+				"location": "/home/oydual3/.flow/testnet-eve.pkey"
+			}
+		}
+	},
+	"deployments": {
+		"testnet": {
+			"openjanus-v08": [
+				"PrivateTip"
+			],
+			"openjanus-v08-faucet": [
+				"ShieldedCheckpoint"
+			]
+		}
+	}
+}
