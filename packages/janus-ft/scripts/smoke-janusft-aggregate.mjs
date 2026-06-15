@@ -1,15 +1,29 @@
 /**
- * smoke-janusft-aggregate.mjs — End-to-end smoke for JanusFT v0.7 aggregate on Flow testnet.
+ * smoke-janusft-aggregate.mjs — End-to-end smoke for JanusFT v0.8 aggregate on Flow testnet.
  *
  * Uses the AmountDiscloseAggregate circuit (4 public inputs) and
  * ConfidentialTransferAggregate circuit (6 public inputs) — same circuits as
  * JanusFlow and JanusERC20 v0.7.
  *
+ * v0.8 CHANGES vs v0.7:
+ *   - shieldedTransfer no longer takes sender snapshot params (removed encryptedSnapshotFrom,
+ *     ephPubFromX, ephPubFromY). Sender updates their ShieldedCheckpoint separately.
+ *   - ShieldedTransferNote event replaces ShieldedTransferWithSnapshot.
+ *   - Strict-mode: bob MUST have ShieldedInbox installed before receiving a transfer.
+ *
+ * PREREQUISITE for step 2 (shieldedTransfer):
+ *   ShieldedInbox must be deployed on testnet AND bob (0xd807a3992d7be612) must have
+ *   run install_inbox on their account.  Without this, shieldedTransfer will panic
+ *   with "JanusFT: recipient has not installed ShieldedInbox".
+ *   Run: flow transactions send transactions/user_install_janus_ft_registry.cdc
+ *        --signer bob --network testnet
+ *   (after ShieldedInbox testnet deployment in a future sprint)
+ *
  * Account topology:
  *   alice  = v066-admin (0xc4e8f99915893a2f)
  *           — holds JanusFT contract + CommitmentRegistry + MockFT vault + COA
  *   bob    = testnet-bob (0xd807a3992d7be612)
- *           — shielded transfer recipient (commitment holder, no registry)
+ *           — shielded transfer recipient (must have ShieldedInbox installed)
  *
  * Test flow:
  *   0. Pre-state read — verify totalLocked == 0 (if not, run reset first)
@@ -17,7 +31,7 @@
  *   2. Wrap 5.0 MockFT — generate AmountDiscloseAggregate proof, call wrapWithProof
  *      Verify: WrapWithSnapshot event, non-empty encryptedSnapshot, commitment updated
  *   3. ShieldedTransfer 2.0 MockFT (alice → bob) — ConfidentialTransferAggregate proof
- *      Verify: ShieldedTransferWithSnapshot event, no cleartext amount, commitments updated
+ *      Verify: ShieldedTransferNote event, no cleartext amount, commitments updated
  *   4. Unwrap 3.0 MockFT — AmountDiscloseAggregate (nonce=0) + ConfidentialTransfer proofs
  *      Verify: UnwrapWithSnapshot event, MockFT vault balance increased, totalLocked decreased
  *   5. adminReset — clean up for future runs
@@ -332,7 +346,7 @@ function proofToCadenceArgs(proof) {
 
 async function main() {
     console.log("=".repeat(72));
-    console.log("JanusFT v0.7 Aggregate — end-to-end smoke test (Flow testnet)");
+    console.log("JanusFT v0.8 Aggregate — end-to-end smoke test (Flow testnet)");
     console.log("=".repeat(72));
     console.log(`JanusFT:        ${JANUS_FT_ADDR}`);
     console.log(`MockFT:         ${MOCK_FT_ADDR}`);
@@ -342,7 +356,7 @@ async function main() {
 
     const results = {
         date: new Date().toISOString(),
-        version: "0.7.0",
+        version: "0.8.0",
         network: "flow-testnet",
         janusft_address: JANUS_FT_ADDR,
         mockft_address:  MOCK_FT_ADDR,
@@ -527,17 +541,17 @@ transaction {
     // Use swappedFlatProof to pre-swap pB for the EVM verifier.
     const flatXferProof = swappedFlatProof(xferProof);
 
+    // v0.8: no sender snapshot params (removed encryptedSnapshotFrom, ephPubFromX, ephPubFromY).
+    // Sender updates their ShieldedCheckpoint separately via update_checkpoint.cdc or
+    // via combined_shielded_transfer_with_checkpoint.cdc for atomic composition.
     const xferArgs = [
         { type: "Address", value: ALICE_ADDR },
         { type: "Address", value: BOB_ADDR },
         { type: "Array",   value: flatXferProof },
         { type: "Array",   value: publicInputs6.map(v => ({ type: "UInt256", value: v.toString() })) },
-        { type: "Array",   value: rand32Bytes().map(b => ({ type: "UInt8", value: b.toString() })) },
-        { type: "UInt256", value: rand128().toString() },
-        { type: "UInt256", value: rand128().toString() },
-        { type: "Array",   value: rand32Bytes().map(b => ({ type: "UInt8", value: b.toString() })) },
-        { type: "UInt256", value: rand128().toString() },
-        { type: "UInt256", value: rand128().toString() },
+        { type: "Array",   value: rand32Bytes().map(b => ({ type: "UInt8", value: b.toString() })) },  // encryptedNoteTo
+        { type: "UInt256", value: rand128().toString() },  // ephPubToX
+        { type: "UInt256", value: rand128().toString() },  // ephPubToY
     ];
 
     const xferResult = runFlowTx(
@@ -549,17 +563,19 @@ transaction {
     results.tx_hashes.shieldedTransfer = xferResult.id;
     console.log(`   tx: ${xferResult.id}`);
 
-    // Check ShieldedTransferWithSnapshot event
-    const xferEvents = findEventOfType(xferResult, ".JanusFT.ShieldedTransferWithSnapshot");
-    if (xferEvents.length === 0) throw new Error("No ShieldedTransferWithSnapshot event emitted");
+    // Check ShieldedTransferNote event (v0.8 — no sender snapshot fields)
+    const xferEvents = findEventOfType(xferResult, ".JanusFT.ShieldedTransferNote");
+    if (xferEvents.length === 0) throw new Error("No ShieldedTransferNote event emitted");
 
     // Privacy check: no cleartext amount in the event
+    // ShieldedTransferNote fields: fromAccount, toAccount, fromCommitX/Y, toCommitX/Y,
+    //   encryptedNoteTo, ephPubToX/Y — no cleartext amount field.
     const xferEventFields = xferEvents[0]?.values?.value?.fields ?? [];
     const xferFieldNames  = xferEventFields.map(f => f.name);
-    if (xferFieldNames.some(n => /amount|value|quantity/i.test(n))) {
-        throw new Error(`PRIVACY VIOLATION: ShieldedTransferWithSnapshot has amount field: ${xferFieldNames}`);
+    if (xferFieldNames.some(n => /^amount$|^value$|^quantity$/i.test(n))) {
+        throw new Error(`PRIVACY VIOLATION: ShieldedTransferNote has amount field: ${xferFieldNames}`);
     }
-    console.log(`   ShieldedTransferWithSnapshot event: no cleartext amount (PRIVACY PASS)`);
+    console.log(`   ShieldedTransferNote event: no cleartext amount (PRIVACY PASS)`);
 
     // totalLocked unchanged
     const totalLockedAfterXfer = runScript(totalLockedScript, [], "tl_xfer");
@@ -739,7 +755,7 @@ transaction {
     writeFileSync(outPath, JSON.stringify(results, null, 2) + "\n");
 
     console.log("\n" + "=".repeat(72));
-    console.log("JanusFT v0.7 Aggregate Smoke — PASS");
+    console.log("JanusFT v0.8 Aggregate Smoke — PASS");
     console.log("=".repeat(72));
     console.log(`Results: ${outPath}`);
 }

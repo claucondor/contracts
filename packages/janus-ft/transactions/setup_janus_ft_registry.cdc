@@ -1,4 +1,4 @@
-// setup_janus_ft_registry.cdc — Post-deploy initialization for JanusFT v0.7.
+// setup_janus_ft_registry.cdc — Post-deploy initialization for JanusFT v0.8.
 //
 // Run ONCE by the deployer account after deploying JanusFT to a new account.
 //
@@ -6,7 +6,7 @@
 //   1. Sets underlyingVaultTypeIdentifier to the testnet MockFT vault type.
 //   2. Installs the FeeConfig resource (idempotent).
 //   3. Creates a CommitmentRegistry with an empty MockFT vault (if not exists).
-//   4. Publishes the CommitmentRegistryPublic capability.
+//   4. Publishes the CommitmentRegistryPublic capability (includes shieldedTransfer in v0.8).
 //   5. Initializes fees: feeBps, feeRecipient, feeReceiverPath.
 //
 // For testnet MockFT (deployed at 0x7599043aea001283):
@@ -14,6 +14,16 @@
 //   feeBps          = 10  (0.1%)
 //   feeRecipient    = deployer address (v066-admin: 0xc4e8f99915893a2f)
 //   feeReceiverPath = /public/mockFTReceiver
+//
+// v0.8 DEPENDENCY ADDRESSES (shielded-recovery primitives, testnet):
+//   ShieldedInbox:      TBD — deploy from packages/shielded-recovery before first transfer
+//   ShieldedCheckpoint: TBD — deploy from packages/shielded-recovery before first transfer
+//
+// v0.8 RECIPIENT PREREQUISITE:
+//   All transfer recipients MUST install ShieldedInbox before receiving a shieldedTransfer.
+//   Strict-mode panics immediately if /public/shieldedInbox is absent.
+//   Recipients run: flow transactions send transactions/user_install_janus_ft_registry.cdc
+//   (or the shielded-recovery install_inbox.cdc transaction)
 //
 // NOTE: The JanusFT contract address in the import must match the deployment target.
 // This template uses JanusFT at the canonical testnet address set in flow.json aliases.

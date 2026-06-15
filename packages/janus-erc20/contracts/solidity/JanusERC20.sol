@@ -1,19 +1,45 @@
 // SPDX-License-Identifier: MIT
 // EXPERIMENTAL — NOT AUDITED — DO NOT USE FOR PRODUCTION
 //
-// JanusERC20.sol — Confidential ERC20 wrapper (v0.7.0).
-// Inherits JanusToken v0.7.0 (aggregate commitment upgrade).
+// JanusERC20.sol — Confidential ERC20 wrapper (v0.8.1).
+// Inherits JanusToken abstract base v0.8.0 (ShieldedInbox integration).
 //
-// Changes from v0.5.0:
-//   - Uses 2-generator Pedersen commitment (pedersen2Gen.addCommits) for
-//     all accumulator updates — correct homomorphism after N deposits
-//   - Accepts pedersen2Gen address in initializer
-//   - VERSION bumped to 0.7.0
+// v0.8.1 changes:
+//   - claimBatch() added to JanusERC20 directly (not the base) to avoid
+//     slot collision: janus-token base adds batchClaimVerifier at slot 94, but
+//     JanusERC20 already uses slot 94 for `underlying`.
+//   - batchClaimVerifier stored at slot 95 (consuming one slot from __gapERC20;
+//     gap reduced from uint256[50] to uint256[49]).
+//   - setBatchClaimVerifier() admin setter added (owner-only).
+//   - IBatchClaimVerifier interface added inline.
+//   - VERSION bumped to "0.8.1".
+//
+// Changes from v0.7.0:
+//   - JanusToken base upgraded to v0.8.0: ShieldedInbox at slot 93, shared
+//     memoRegistry at slot 90, firstSnapshotBlock/feeRecipient/feeBps now in base.
+//   - initialize() adds _inboxAddress as 8th arg; passed through to
+//     __JanusToken_init (7-arg v0.8.0 signature).
+//   - 9-arg shieldedTransfer (with senderSnapshot params) removed; base's
+//     6-arg shieldedTransfer inherited — senders update ShieldedCheckpoint
+//     in a separate composable call.
+//   - ShieldedInbox.deposit called atomically on every shieldedTransfer
+//     (handled by base; reverts if inbox full).
+//   - adminBatchResetSlots inherited from base (MAX_BATCH_RESET = 100).
+//   - Duplicate state vars (firstSnapshotBlock, feeRecipient, feeBps,
+//     memoRegistry), events, and admin functions removed — now inherited.
+//   - VERSION bumped to 0.8.0.
+//
+// ERC20 wrap/unwrap path unchanged: transferFrom pulls underlying from caller
+// on wrap; transfer returns underlying to recipient on unwrap.
 
 pragma solidity ^0.8.20;
 
 import {JanusToken} from "./JanusToken.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+
+// ---------------------------------------------------------------------------
+// ERC20 interface (minimal — only the methods JanusERC20 calls)
+// ---------------------------------------------------------------------------
 
 interface IERC20 {
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
@@ -22,92 +48,67 @@ interface IERC20 {
     function decimals() external view returns (uint8);
 }
 
-interface IMemoKeyRegistryV2 {
-    function getMemoKey(address user)
-        external
-        view
-        returns (uint256 x, uint256 y, uint256 publishedAt);
+/// @dev ConfidentialClaimBatchVerifier — 6 public inputs (pot22 ceremony, N=50 notes).
+/// Public input layout: [C_old_x, C_old_y, C_new_x, C_new_y, C_consumed_x, C_consumed_y]
+interface IBatchClaimVerifier {
+    function verifyProof(
+        uint[2] calldata _pA,
+        uint[2][2] calldata _pB,
+        uint[2] calldata _pC,
+        uint[6] calldata _pubSignals
+    ) external view returns (bool);
 }
+
+// ---------------------------------------------------------------------------
+// JanusERC20 — concrete implementation for any ERC20 underlying
+// ---------------------------------------------------------------------------
 
 contract JanusERC20 is JanusToken {
 
-    string  public constant VERSION  = "0.7.0";
+    // Version sentinel — readable on-chain and in deployment manifests.
+    string  public constant VERSION  = "0.8.1";
+
+    // Hard cap on a single wrap (18e18 token units). Keeps individual
+    // commitments well within the BabyJubJub subgroup order.
     uint256 public constant MAX_WRAP = 18_000_000_000_000_000_000;
 
     // -----------------------------------------------------------------------
-    // Storage — slots after JanusToken base
+    // Storage — slots after JanusToken base (slot 93 = shieldedInbox)
+    //
+    // LAYOUT NOTE: janus-erc20's JanusToken base ends at slot 93 (shieldedInbox).
+    // Slot 94 is `underlying` — already deployed to testnet proxy.
+    // Slot 95 is `batchClaimVerifier` — new in v0.8.1, consumed from __gapERC20.
+    // The janus-token package adds batchClaimVerifier at slot 94 in its base
+    // (JanusFlow has no child slots), but this package cannot do the same due to
+    // the `underlying` slot already occupying slot 94 on deployed proxies.
     // -----------------------------------------------------------------------
 
-    /// underlying ERC20 token
-    address public underlying;
+    /// @notice The underlying ERC20 token held in escrow.
+    address public underlying;                   // slot 94
 
-    /// first block a user appeared in a snapshot event
-    mapping(address => uint256) public firstSnapshotBlock;
+    /// @dev Batch claim verifier — ConfidentialClaimBatchVerifier (pot22 ceremony, N=50).
+    /// Set via initialize() for fresh deploys or setBatchClaimVerifier() post-upgrade.
+    IBatchClaimVerifier public batchClaimVerifier; // slot 95
 
-    /// fee destination address
-    address public feeRecipient;
-
-    /// fee basis points (100 = 1%, max 100)
-    uint16  public feeBps;
-
-    /// shared MemoKeyRegistry
-    IMemoKeyRegistryV2 public memoRegistry;
-
-    /// reserved
-    uint256[35] private __gapERC20;
+    /// @dev Reserved gap for future ERC20-specific state variables (reduced from 50 to 49).
+    uint256[49] private __gapERC20;              // slots 96..144
 
     // -----------------------------------------------------------------------
-    // Fee constants
+    // Initializer — for new proxies (v0.8.0)
     // -----------------------------------------------------------------------
 
-    uint16 public constant MAX_FEE_BPS = 100;
-
-    // -----------------------------------------------------------------------
-    // Events
-    // -----------------------------------------------------------------------
-
-    event WrapWithSnapshot(
-        address indexed user,
-        uint256 amount,
-        bytes encryptedSnapshot,
-        uint256 ephPubkeyX,
-        uint256 ephPubkeyY
-    );
-
-    event ShieldedTransferWithSnapshot(
-        address indexed from,
-        address indexed to,
-        bytes encryptedSnapshotFrom,
-        uint256 ephPubkeyFromX,
-        uint256 ephPubkeyFromY,
-        bytes encryptedNoteTo,
-        uint256 ephPubkeyToX,
-        uint256 ephPubkeyToY
-    );
-
-    event UnwrapWithSnapshot(
-        address indexed user,
-        address indexed recipient,
-        uint256 amount,
-        bytes encryptedSnapshot,
-        uint256 ephPubkeyX,
-        uint256 ephPubkeyY
-    );
-
-    event FeeCollected(address indexed user, uint256 fee, string op);
-    event FeeRecipientChanged(address indexed oldRecipient, address indexed newRecipient);
-    event FeeBpsChanged(uint16 oldBps, uint16 newBps);
-    event MemoRegistrySet(address indexed registry);
-    event AdminSlotReset(
-        address indexed user,
-        uint256 priorCommitmentX,
-        uint256 priorCommitmentY
-    );
-
-    // -----------------------------------------------------------------------
-    // Initializer — for NEW proxies
-    // -----------------------------------------------------------------------
-
+    /// @notice Initialize a new JanusERC20 proxy.
+    /// @param _babyJub                  BabyJubJub curve helper contract.
+    /// @param _transferVerifier         ConfidentialTransfer Groth16 verifier.
+    /// @param _amountDiscloseVerifier   AmountDisclose Groth16 verifier.
+    /// @param _underlying               ERC20 token to wrap (held in escrow).
+    /// @param _owner                    Initial owner (UUPS upgrade authority).
+    /// @param _memoRegistry             Shared MemoKeyRegistry for recipient pubkeys.
+    /// @param _pedersen2Gen             2-generator Pedersen commitment library.
+    /// @param _inboxAddress             ShieldedInbox for atomic note delivery.
+    ///                                  May be address(0) for deployments without inbox.
+    /// @param _batchClaimVerifier       ConfidentialClaimBatchVerifier (pot22) for claimBatch().
+    ///                                  May be address(0) — set later via setBatchClaimVerifier().
     function initialize(
         address _babyJub,
         address _transferVerifier,
@@ -115,96 +116,37 @@ contract JanusERC20 is JanusToken {
         address _underlying,
         address _owner,
         address _memoRegistry,
-        address _pedersen2Gen
+        address _pedersen2Gen,
+        address _inboxAddress,
+        address _batchClaimVerifier
     ) external initializer {
-        require(_underlying   != address(0), "JanusERC20: zero underlying");
-        require(_memoRegistry != address(0), "JanusERC20: zero memoRegistry");
-        __JanusToken_init(_babyJub, _transferVerifier, _amountDiscloseVerifier, _owner, _pedersen2Gen);
-        underlying   = _underlying;
-        memoRegistry = IMemoKeyRegistryV2(_memoRegistry);
-    }
-
-    // -----------------------------------------------------------------------
-    // Admin — post-deploy setters (owner-only)
-    // -----------------------------------------------------------------------
-
-    function setMemoRegistry(address _registry) external onlyOwner {
-        require(_registry != address(0), "JanusERC20: zero registry");
-        memoRegistry = IMemoKeyRegistryV2(_registry);
-        emit MemoRegistrySet(_registry);
-    }
-
-    function initFees(address recipient, uint16 bps) external onlyOwner {
-        require(
-            feeRecipient == address(0) && feeBps == 0,
-            "JanusERC20: fees already initialized"
+        require(_underlying != address(0), "JanusERC20: zero underlying");
+        __JanusToken_init(
+            _babyJub,
+            _transferVerifier,
+            _amountDiscloseVerifier,
+            _owner,
+            _memoRegistry,
+            _pedersen2Gen,
+            _inboxAddress
         );
-        require(recipient != address(0), "JanusERC20: zero feeRecipient");
-        require(bps <= MAX_FEE_BPS,     "JanusERC20: exceeds MAX_FEE_BPS");
-        feeRecipient = recipient;
-        feeBps = bps;
-        emit FeeRecipientChanged(address(0), recipient);
-        emit FeeBpsChanged(0, bps);
-    }
-
-    function setFeeRecipient(address newRecipient) external onlyOwner {
-        require(newRecipient != address(0), "JanusERC20: zero feeRecipient");
-        address old = feeRecipient;
-        feeRecipient = newRecipient;
-        emit FeeRecipientChanged(old, newRecipient);
-    }
-
-    function setFeeBps(uint16 newBps) external onlyOwner {
-        require(newBps <= MAX_FEE_BPS, "JanusERC20: exceeds MAX_FEE_BPS");
-        uint16 old = feeBps;
-        feeBps = newBps;
-        emit FeeBpsChanged(old, newBps);
-    }
-
-    function computeFee(uint256 grossAmount) public view returns (uint256) {
-        if (feeBps == 0 || feeRecipient == address(0)) return 0;
-        return (grossAmount * feeBps) / 10000;
-    }
-
-    // -----------------------------------------------------------------------
-    // Internal helpers
-    // -----------------------------------------------------------------------
-
-    function _recordFirstSnapshot(address account) internal {
-        if (firstSnapshotBlock[account] == 0) {
-            firstSnapshotBlock[account] = block.number;
+        underlying = _underlying;
+        if (_batchClaimVerifier != address(0)) {
+            batchClaimVerifier = IBatchClaimVerifier(_batchClaimVerifier);
         }
     }
 
-    function _calcFee(uint256 grossAmount) internal view returns (uint256 fee, uint256 net) {
-        if (feeBps == 0 || feeRecipient == address(0)) {
-            return (0, grossAmount);
-        }
-        fee = (grossAmount * feeBps) / 10000;
-        net = grossAmount - fee;
-    }
-
     // -----------------------------------------------------------------------
-    // Public wrapWithProof
+    // Public wrapWithProof (ERC20-specific)
     //
-    // Requires a Groth16 proof from the AmountDiscloseAggregate circuit proving:
-    //   Commit(amount, blinding) = (commitX, commitY)
-    // where amount is the net token amount after any fee deduction.
+    // Pulls `amount` of the underlying ERC20 from the caller via transferFrom,
+    // deducts any protocol fee, then verifies a Groth16 AmountDisclose proof
+    // that the submitted Pedersen commitment encodes the net amount.
     //
     // Public input layout: [amount, commitX, commitY, nonce]
     //   - amount:  net wrap amount (ERC20 token units, after fee deduction)
-    //   - commit:  the Pedersen commitment point being credited to the caller
+    //   - commit:  the Pedersen commitment being credited to the caller
     //   - nonce:   caller-chosen unique anti-replay value
-    //
-    // The ERC20 amount comes from a function parameter (not msg.value).
-    // transferFrom pulls tokens from the caller first, then proof is verified.
-    //
-    // @param amount  Gross ERC20 token amount to wrap (transferFrom pulls this).
-    // @param nonce   Anti-replay nonce. Must be unused for msg.sender.
-    // @param commit  [commitX, commitY] — Pedersen commitment for the net amount.
-    // @param pA      Groth16 proof element A.
-    // @param pB      Groth16 proof element B.
-    // @param pC      Groth16 proof element C.
     // -----------------------------------------------------------------------
 
     /// @notice Wrap ERC20 tokens into a shielded commitment with anti-replay proof.
@@ -234,7 +176,7 @@ contract JanusERC20 is JanusToken {
         require(!usedNonces[msg.sender][nonce], "JanusERC20: nonce used");
         usedNonces[msg.sender][nonce] = true;
 
-        // Pull gross amount from caller
+        // Pull gross amount from caller via ERC20 transferFrom.
         bool okPull = IERC20(underlying).transferFrom(msg.sender, address(this), amount);
         require(okPull, "JanusERC20: transferFrom failed");
 
@@ -249,7 +191,7 @@ contract JanusERC20 is JanusToken {
         require(net > 0,         "JanusERC20: zero net wrap");
         require(net <= MAX_WRAP, "JanusERC20: exceeds MAX_WRAP");
 
-        // Verify the amount-disclose proof: proves commit = [net]G + [blinding]H
+        // Verify amount-disclose proof: proves commit = [net]G + [blinding]H.
         require(
             amountDiscloseVerifier.verifyProof(
                 [pA[0], pA[1]],
@@ -260,7 +202,7 @@ contract JanusERC20 is JanusToken {
             "JanusERC20: invalid amount_disclose proof"
         );
 
-        // Accumulate commitment into caller's shielded balance
+        // Accumulate commitment into caller's shielded balance (homomorphic).
         Point memory current = _effectiveCommitment(msg.sender);
         (uint256 nx, uint256 ny) = pedersen2Gen.addCommits(
             current.x, current.y,
@@ -281,9 +223,14 @@ contract JanusERC20 is JanusToken {
     }
 
     // -----------------------------------------------------------------------
-    // Public unwrap
+    // Public unwrap (ERC20-specific)
+    //
+    // Verifies an amount-disclose proof for the claimed amount and a transfer
+    // proof demonstrating the sender has sufficient shielded balance.  Returns
+    // the underlying ERC20 to `recipient` after deducting any protocol fee.
     // -----------------------------------------------------------------------
 
+    /// @notice Unwrap ERC20 tokens from shielded balance and return to recipient.
     function unwrap(
         uint256 claimedAmount,
         address payable recipient,
@@ -301,63 +248,12 @@ contract JanusERC20 is JanusToken {
     }
 
     // -----------------------------------------------------------------------
-    // 9-arg shieldedTransfer (SDK v0.6.3+ compatible selector 0x6218f5d9)
-    // -----------------------------------------------------------------------
-
-    function shieldedTransfer(
-        address to,
-        uint256[6] calldata publicInputs,
-        uint256[8] calldata proof,
-        bytes calldata encryptedSnapshot,
-        uint256 ephPubkeyX,
-        uint256 ephPubkeyY,
-        bytes calldata encryptedNoteTo,
-        uint256 ephPubkeyToX,
-        uint256 ephPubkeyToY
-    ) external {
-        require(to != address(0), "JanusERC20: transfer to zero address");
-        require(to != msg.sender, "JanusERC20: cannot transfer to self");
-
-        _recordFirstSnapshot(msg.sender);
-        _recordFirstSnapshot(to);
-
-        Point memory senderCommit = _effectiveCommitment(msg.sender);
-        require(
-            publicInputs[0] == senderCommit.x && publicInputs[1] == senderCommit.y,
-            "JanusERC20: C_old mismatch"
-        );
-
-        require(
-            _verifyTransferProof(publicInputs, proof),
-            "JanusERC20: invalid transfer proof"
-        );
-
-        // Sender: set new_commit
-        commitments[msg.sender] = Point({ x: publicInputs[4], y: publicInputs[5] });
-
-        // Recipient: accumulate transfer_commit homomorphically
-        Point memory recvCommit = _effectiveCommitment(to);
-        (uint256 rx, uint256 ry) = pedersen2Gen.addCommits(
-            recvCommit.x, recvCommit.y,
-            publicInputs[2], publicInputs[3]
-        );
-        commitments[to] = Point({ x: rx, y: ry });
-
-        emit ConfidentialTransfer(msg.sender, to);
-        emit ShieldedTransferWithSnapshot(
-            msg.sender, to,
-            encryptedSnapshot, ephPubkeyX, ephPubkeyY,
-            encryptedNoteTo, ephPubkeyToX, ephPubkeyToY
-        );
-    }
-
-    // -----------------------------------------------------------------------
     // Template-method overrides
     // -----------------------------------------------------------------------
 
     /// @dev _wrap is not called by any public function in this contract.
     /// wrapWithProof() handles the full wrap path directly.
-    /// This override satisfies the abstract base requirement; it reverts if called.
+    /// This override satisfies the abstract base requirement; reverts if called.
     function _wrap(
         uint256,
         uint256[2] calldata,
@@ -367,6 +263,9 @@ contract JanusERC20 is JanusToken {
         revert("JanusERC20: use wrapWithProof");
     }
 
+    /// @dev _unwrap override — ERC20 transfer path.
+    /// Verifies both proofs, debits the sender's commitment, and transfers
+    /// underlying ERC20 (minus fee) to `recipient`.
     function _unwrap(
         uint256 claimedAmount,
         address payable recipient,
@@ -423,50 +322,85 @@ contract JanusERC20 is JanusToken {
     }
 
     // -----------------------------------------------------------------------
-    // TESTNET-ONLY — adminResetSlot
-    // -----------------------------------------------------------------------
-
-    uint256 private constant FLOW_EVM_TESTNET_CHAIN_ID = 545;
-
-    function adminResetSlot(address user) external onlyOwner {
-        require(
-            block.chainid == FLOW_EVM_TESTNET_CHAIN_ID,
-            "JanusERC20: adminResetSlot is testnet-only (chainId 545)"
-        );
-        require(user != address(0), "JanusERC20: zero user");
-
-        Point storage slot = commitments[user];
-        uint256 priorX = slot.x;
-        uint256 priorY = slot.y;
-
-        slot.x = 0;
-        slot.y = 1;
-
-        firstSnapshotBlock[user] = 0;
-
-        emit AdminSlotReset(user, priorX, priorY);
-    }
-
-    // -----------------------------------------------------------------------
     // View helpers
     // -----------------------------------------------------------------------
 
+    /// @notice Returns the contract's current balance of the underlying ERC20.
     function underlyingBalance() external view returns (uint256) {
         return IERC20(underlying).balanceOf(address(this));
     }
 
-    function getMemoKeyFromRegistry(address user)
-        public
-        view
-        returns (uint256 x, uint256 y)
-    {
-        require(address(memoRegistry) != address(0), "JanusERC20: memoRegistry not set");
-        (x, y, ) = memoRegistry.getMemoKey(user);
+    // -----------------------------------------------------------------------
+    // claimBatch — batch shielded-inbox claim (v0.8.1)
+    //
+    // Mirrors JanusToken.claimBatch (janus-token package) with identical logic.
+    // Defined here rather than the base because `batchClaimVerifier` lives at
+    // slot 95 in JanusERC20 (base slot 94 is occupied by `underlying`).
+    //
+    // Public input layout (6 signals):
+    //   [0] C_old_x, [1] C_old_y — current commitment (circuit-bound to on-chain)
+    //   [2] C_new_x, [3] C_new_y — new commitment after draining N notes
+    //   [4] C_consumed_x, [5] C_consumed_y — sum of N note commitments
+    //
+    // Proof format uint256[8]: [pA[2], pB row0[2], pB row1[2], pC[2]] (snarkjs)
+    //
+    // Trust model: same as janus-token/JanusToken.sol — see that file for full docs.
+    // v0.8 testnet: notes not marked consumed on-chain; mainnet fix requires
+    // NoteCommitmentTracker.sol (planned post-v0.8).
+    // -----------------------------------------------------------------------
+
+    /// @notice Emitted when a user batch-claims N inbox notes in a single proof.
+    event BatchClaimed(address indexed user, uint256 newCommitX, uint256 newCommitY);
+
+    /// @notice Set or update the BatchClaimVerifier address. Owner-only.
+    /// @dev Call after UUPS upgrade to wire slot 95 (zero until set).
+    function setBatchClaimVerifier(address _verifier) external onlyOwner {
+        require(_verifier != address(0), "JanusERC20: zero batchClaimVerifier");
+        batchClaimVerifier = IBatchClaimVerifier(_verifier);
+    }
+
+    /// @notice Batch-claim up to 50 ShieldedInbox notes with a single Groth16 proof.
+    /// @param publicInputs  [C_old_x, C_old_y, C_new_x, C_new_y, C_consumed_x, C_consumed_y]
+    /// @param proof         Groth16 proof packed as [pA[2], pB[4], pC[2]] (snarkjs flat format).
+    function claimBatch(
+        uint256[6] calldata publicInputs,
+        uint256[8] calldata proof
+    ) external {
+        require(
+            address(batchClaimVerifier) != address(0),
+            "JanusERC20: batchClaimVerifier not set"
+        );
+
+        // 1. Verify the Groth16 proof (pot22 ceremony).
+        require(
+            batchClaimVerifier.verifyProof(
+                [proof[0], proof[1]],
+                [[proof[2], proof[3]], [proof[4], proof[5]]],
+                [proof[6], proof[7]],
+                publicInputs
+            ),
+            "JanusERC20: invalid batch proof"
+        );
+
+        // 2. Verify C_old matches caller's current on-chain commitment.
+        Point memory current = _effectiveCommitment(msg.sender);
+        require(
+            current.x == publicInputs[0] && current.y == publicInputs[1],
+            "JanusERC20: C_old mismatch with stored commit"
+        );
+
+        // 3. Update commitment to C_new.
+        commitments[msg.sender] = Point({ x: publicInputs[2], y: publicInputs[3] });
+
+        emit BatchClaimed(msg.sender, publicInputs[2], publicInputs[3]);
+
+        // NOTE(v0.8 testnet): inbox notes NOT marked consumed on-chain.
+        // See circuits/aggregate-claim-batch/README.md §6 for mainnet fix.
     }
 }
 
 // ---------------------------------------------------------------------------
-// JanusERC20_Proxy — thin ERC1967 wrapper.
+// JanusERC20_Proxy — thin ERC1967 wrapper for fresh proxy deployments.
 // ---------------------------------------------------------------------------
 
 contract JanusERC20_Proxy is ERC1967Proxy {

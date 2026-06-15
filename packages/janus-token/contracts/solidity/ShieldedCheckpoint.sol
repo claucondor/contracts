@@ -1,0 +1,1 @@
+../../../shielded-recovery/contracts/solidity/ShieldedCheckpoint.sol

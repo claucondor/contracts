@@ -2,11 +2,31 @@
 //
 // This is the PRODUCTION contract — no stubs, real BabyJub cross-VM, real Groth16 ZK.
 //
-// UPGRADE NOTES (from v0.6 windowed-Pedersen → v0.7 aggregate-Pedersen):
-//   All existing contract-level fields are preserved verbatim for Cadence upgrade-validator
-//   compatibility. New EVM addresses and curve constants are exposed as view functions
-//   rather than stored fields. The usedNonces anti-replay set is added INSIDE the existing
-//   CommitmentRegistry resource (no new contract-level field).
+// UPGRADE NOTES (v0.8.1 → v0.8.2 batchN10):
+//   v0.8.2 rewires BATCH_CLAIM_VERIFIER_ADDR() to the N=10 ceremony verifier.
+//   Verifier: ConfidentialClaimBatchVerifier.sol at 0x66f25B8f2e7ABFA97ff6446aEAfE5c5D3b1c8d2f
+//   Circuit:  pot22 ceremony, N=10 notes max per batch (was N=50; reduced for Vercel 60s limit).
+//
+// UPGRADE NOTES (v0.8.0 → v0.8.1 claimBatch):
+//   v0.8.1 adds claimBatch — aggregate multiple ShieldedInbox notes into the caller's
+//   running commitment in a single Groth16-verified cross-VM call.
+//   Old verifier (N=50): 0x2FBf6baef1D70f5A9aFF2602c934Bd62dcf6Df80 (archived)
+//   Circuit:  pot22 ceremony, N=50 notes max per batch.
+//   Public input layout (6 signals): [C_old_x, C_old_y, C_new_x, C_new_y, C_consumed_x, C_consumed_y]
+//   TRUST ASSUMPTION: consumed notes are NOT marked on-chain in v0.8. C_old state machine
+//   is the sole replay barrier. Mainnet fix: NoteCommitmentTracker (L6).
+//
+// UPGRADE NOTES (v0.7 aggregate-Pedersen → v0.8 shielded-recovery):
+//   v0.8 adds ShieldedInbox integration (STRICT mode) and adminResetSlot / adminBatchResetSlots.
+//   shieldedTransfer now deposits directly to the recipient's on-chain ShieldedInbox.
+//   Recipients MUST install ShieldedInbox (run install_inbox) before receiving.
+//   Sender snapshot params removed from shieldedTransfer — sender updates their own
+//   ShieldedCheckpoint in a separate composable call or via the combined tx.
+//   New AdminProofStoragePath constant aliases AdminStoragePath for clean API semantics.
+//   MAX_BATCH_RESET limits adminBatchResetSlots to 100 users per call.
+//
+//   All existing contract-level fields preserved verbatim for Cadence upgrade-validator
+//   compatibility. New view functions, events, and resource methods are additive-only.
 //
 // Architecture:
 //   - Generic: wraps ANY @{FungibleToken.Vault} underlying (underlyingVaultTypeIdentifier).
@@ -18,10 +38,12 @@
 //   - ZK proof verification (amount_disclose_aggregate + ConfidentialTransferAggregate)
 //     done cross-VM via ConfidentialTransferAggregateVerifier.sol and
 //     AmountDiscloseAggregateVerifier.sol.
+//   - ShieldedInbox: v0.8 STRICT mode — shieldedTransfer deposits to recipient's
+//     NoteInbox directly. Recipient must have inbox installed or transfer panics.
 //   - MemoKey: uses JanusFlow.MemoKey from 0x5dcbeb41055ec57e — shared
 //     generic BabyJub pubkey resource.
 //   - publishMemoKey: Cadence-only. MemoKey at canonical /storage/openjanusMemoKey.
-//   - Events follow v0.7 schema with snapshot ciphertexts + nonce.
+//   - Events follow v0.8 schema: ShieldedTransferNote (no sender snapshot).
 //
 // EVM contracts used (Flow EVM testnet, chainId 545):
 //   BabyJub.sol:                                0x27139AFda7425f51F68D32e0A38b7D43BcB0f870
@@ -30,9 +52,10 @@
 //
 // SECURITY NOTE: EXPERIMENTAL. Not audited. Do not use with real funds.
 
-import FungibleToken from 0x9a0766d93b6608b7
-import EVM from 0x8c5303eaa26202d6
-import JanusFlow from 0x5dcbeb41055ec57e
+import "FungibleToken"
+import "EVM"
+import "JanusFlow"
+import "ShieldedInbox"
 
 access(all) contract JanusFT {
 
@@ -56,6 +79,12 @@ access(all) contract JanusFT {
         return "0xa80283baB7fcEFC2c75De43DB5a1cBF00E96B984"
     }
 
+    /// ConfidentialClaimBatchVerifier.sol — Groth16 claimBatch verifier (v0.8.2, pot22, N=10).
+    /// Public input layout: [C_old_x, C_old_y, C_new_x, C_new_y, C_consumed_x, C_consumed_y]
+    access(all) view fun BATCH_CLAIM_VERIFIER_ADDR(): String {
+        return "0x66f25B8f2e7ABFA97ff6446aEAfE5c5D3b1c8d2f"
+    }
+
     /// BN254 field prime (= BabyJubJub base field prime)
     access(all) view fun BN254_P(): UInt256 {
         return 21888242871839275222246405745257275088548364400416034343698204186575808495617
@@ -77,6 +106,20 @@ access(all) contract JanusFT {
     access(all) let AdminStoragePath:               StoragePath
     access(all) let CommitmentRegistryStoragePath:  StoragePath
     access(all) let CommitmentRegistryPublicPath:   PublicPath
+
+    /// v0.8: AdminProofStoragePath aliases AdminStoragePath.
+    /// Transactions that borrow the Admin resource via its "admin proof" role
+    /// should use this constant for API clarity.  Both paths point to the same
+    /// /storage/janusFTAdmin location where the @Admin resource lives.
+    access(all) let AdminProofStoragePath:          StoragePath
+
+    // -----------------------------------------------------------------------
+    // v0.8 constants
+    // -----------------------------------------------------------------------
+
+    /// Maximum number of slots that adminBatchResetSlots can clear per call.
+    /// Prevents unbounded gas use on-chain.
+    access(all) view fun MAX_BATCH_RESET(): Int { return 100 }
 
     // -----------------------------------------------------------------------
     // State — PRESERVED from old contract (upgrade-safe)
@@ -138,7 +181,8 @@ access(all) contract JanusFT {
         ephPubY:           UInt256
     )
 
-    /// HIDE — no cleartext amount; snapshot allows sender to recover balance.
+    /// @deprecated — kept for upgrade validator compat (v0.7 schema). NOT emitted in v0.8.
+    /// v0.8 drops sender-snapshot params; use ShieldedTransferNote instead.
     access(all) event ShieldedTransferWithSnapshot(
         fromCommitX:           UInt256,
         fromCommitY:           UInt256,
@@ -150,6 +194,22 @@ access(all) contract JanusFT {
         encryptedNoteTo:       [UInt8],
         ephPubToX:             UInt256,
         ephPubToY:             UInt256
+    )
+
+    /// ACTIVE (v0.8) — HIDE: no cleartext amount, no sender snapshot.
+    /// The recipient note ciphertext is deposited to recipient's ShieldedInbox on-chain
+    /// AND emitted here for indexers / auditability.
+    /// Sender updates their own ShieldedCheckpoint in a separate composable call.
+    access(all) event ShieldedTransferNote(
+        fromAccount:     Address,
+        toAccount:       Address,
+        fromCommitX:     UInt256,
+        fromCommitY:     UInt256,
+        toCommitX:       UInt256,
+        toCommitY:       UInt256,
+        encryptedNoteTo: [UInt8],
+        ephPubToX:       UInt256,
+        ephPubToY:       UInt256
     )
 
     /// LEAK BY DESIGN — boundary event reveals withdrawal amount.
@@ -174,6 +234,28 @@ access(all) contract JanusFT {
     /// snapshots, replacing the DEFAULT_LOOKBACK window heuristic.
     /// Mirrors _recordFirstSnapshot(account) from JanusToken.sol on the EVM side.
     access(all) event FirstSnapshot(account: Address, block: UInt64)
+
+    // -----------------------------------------------------------------------
+    // v0.8 admin events
+    // -----------------------------------------------------------------------
+
+    /// Emitted by adminResetSlot and adminBatchResetSlots when a user's commitment
+    /// slot is cleared back to the BabyJubJub identity (no-balance sentinel).
+    access(all) event SlotReset(user: Address)
+
+    /// Emitted by claimBatch when inbox notes are aggregated into the caller's commitment.
+    ///
+    /// TRUST ASSUMPTION (v0.8 testnet): consumed notes are NOT marked on-chain after this
+    /// call. The C_old state machine is the sole replay barrier — once C_old advances to
+    /// C_new, any proof referencing the previous C_old fails the consistency check at step 1.
+    /// A caller cannot replay the same proof twice (second call sees C_old = C_new).
+    /// Mainnet fix (L6): NoteCommitmentTracker marks notes spent, closing the window for
+    /// cross-session note reuse.
+    access(all) event BatchClaimed(
+        account:    Address,
+        newCommitX: UInt256,
+        newCommitY: UInt256
+    )
 
     // -----------------------------------------------------------------------
     // Fee events
@@ -404,6 +486,39 @@ access(all) contract JanusFT {
         return result.data[31] == 1
     }
 
+    /// Verify ConfidentialClaimBatch proof (v0.8.1).
+    /// Public input layout (6 signals):
+    ///   [0..1] C_old      — caller's current commitment
+    ///   [2..3] C_new      — new accumulated commitment (post-claim)
+    ///   [4..5] C_consumed — homomorphic sum of consumed inbox note commitments
+    access(self) fun _verifyBatchClaimProof(
+        proof:        [UInt256],
+        publicInputs: [UInt256],
+        coa:          auth(EVM.Call) &EVM.CadenceOwnedAccount
+    ): Bool {
+        pre {
+            proof.length == 8:        "JanusFT: batchClaim proof must be 8 limbs"
+            publicInputs.length == 6: "JanusFT: batchClaim publicInputs must be 6"
+        }
+        let pA: [UInt256; 2]       = [proof[0], proof[1]]
+        let pB: [[UInt256; 2]; 2]  = [[proof[2], proof[3]], [proof[4], proof[5]]]
+        let pC: [UInt256; 2]       = [proof[6], proof[7]]
+        let pub6: [UInt256; 6]     = [
+            publicInputs[0], publicInputs[1], publicInputs[2],
+            publicInputs[3], publicInputs[4], publicInputs[5]
+        ]
+
+        let calldata = EVM.encodeABIWithSignature(
+            "verifyProof(uint256[2],uint256[2][2],uint256[2],uint256[6])",
+            [pA, pB, pC, pub6]
+        )
+        let addr = EVM.addressFromString(JanusFT.BATCH_CLAIM_VERIFIER_ADDR())
+        let result = coa.call(to: addr, data: calldata, gasLimit: 500_000, value: EVM.Balance(attoflow: 0))
+        if result.status != EVM.Status.successful { return false }
+        if result.data.length < 32 { return false }
+        return result.data[31] == 1
+    }
+
     // -----------------------------------------------------------------------
     // CommitmentRegistry resource
     //
@@ -415,6 +530,16 @@ access(all) contract JanusFT {
     access(all) resource interface CommitmentRegistryPublic {
         access(all) fun balanceOfCommitment(account: Address): Commitment
         access(all) view fun getTotalLocked(): UFix64
+        access(all) fun shieldedTransfer(
+            fromAccount:     Address,
+            toAccount:       Address,
+            transferProof:   [UInt256],
+            publicInputs:    [UInt256],
+            encryptedNoteTo: [UInt8],
+            ephPubToX:       UInt256,
+            ephPubToY:       UInt256,
+            coa:             auth(EVM.Call) &EVM.CadenceOwnedAccount
+        )
     }
 
     access(all) resource CommitmentRegistry: CommitmentRegistryPublic {
@@ -552,19 +677,29 @@ access(all) contract JanusFT {
             )
         }
 
-        // ----- shieldedTransfer -----
+        // ----- shieldedTransfer (v0.8) -----
+        //
+        // v0.8 CHANGES:
+        //   • Removed sender snapshot params (encryptedSnapshotFrom, ephPubFromX/Y).
+        //     Sender updates their own ShieldedCheckpoint separately (composable).
+        //   • STRICT mode: recipient MUST have a ShieldedInbox installed.
+        //     Panics immediately (before any cross-VM call) if inbox is absent.
+        //   • Deposits the encrypted note directly to recipient's NoteInbox.
+        //   • Emits ShieldedTransferNote (v0.8) instead of ShieldedTransferWithSnapshot.
+        //
+        // Public input layout (6 signals, unchanged from v0.7):
+        //   [0..1] C_old — sender's current commitment
+        //   [2..3] C_tx  — transfer commitment (for recipient)
+        //   [4..5] C_new — sender's new commitment
         access(all) fun shieldedTransfer(
-            fromAccount:            Address,
-            toAccount:              Address,
-            transferProof:          [UInt256],
-            publicInputs:           [UInt256],
-            encryptedSnapshotFrom:  [UInt8],
-            ephPubFromX:            UInt256,
-            ephPubFromY:            UInt256,
-            encryptedNoteTo:        [UInt8],
-            ephPubToX:              UInt256,
-            ephPubToY:              UInt256,
-            coa:                    auth(EVM.Call) &EVM.CadenceOwnedAccount
+            fromAccount:     Address,
+            toAccount:       Address,
+            transferProof:   [UInt256],
+            publicInputs:    [UInt256],
+            encryptedNoteTo: [UInt8],
+            ephPubToX:       UInt256,
+            ephPubToY:       UInt256,
+            coa:             auth(EVM.Call) &EVM.CadenceOwnedAccount
         ) {
             pre {
                 fromAccount != toAccount: "JanusFT: cannot shieldedTransfer to self"
@@ -572,6 +707,15 @@ access(all) contract JanusFT {
                 publicInputs.length == 6:  "JanusFT: publicInputs must have 6 elements"
             }
 
+            // ── STEP 1: STRICT inbox check (BEFORE any cross-VM call) ──────────
+            // v0.8 protocol: recipients MUST install ShieldedInbox to receive.
+            // Failing fast here (before ZK verification) avoids wasting EVM gas
+            // on a transfer that would ultimately be undeliverable.
+            let recipientInbox = getAccount(toAccount)
+                .capabilities.borrow<&{ShieldedInbox.Receiver}>(/public/shieldedInbox)
+                ?? panic("JanusFT: recipient has not installed ShieldedInbox — they must call install_inbox first")
+
+            // ── STEP 2: C_old consistency check (no cross-VM) ─────────────────
             let senderCommit = JanusFT.commitments[fromAccount] ?? Commitment(x: 0, y: 1)
             assert(
                 publicInputs[0] == senderCommit.x && publicInputs[1] == senderCommit.y,
@@ -580,14 +724,16 @@ access(all) contract JanusFT {
 
             // Capture freshness BEFORE any state writes (sender always has a commitment
             // if they pass C_old check, but recipient may be nil on first receive)
-            let senderWasFresh: Bool = (JanusFT.commitments[fromAccount] == nil)
+            let senderWasFresh: Bool   = (JanusFT.commitments[fromAccount] == nil)
             let recipientWasFresh: Bool = (JanusFT.commitments[toAccount] == nil)
 
+            // ── STEP 3: ZK verification (cross-VM) ────────────────────────────
             let transferVerified = JanusFT._verifyTransferProof(
                 proof: transferProof, publicInputs: publicInputs, coa: coa
             )
             assert(transferVerified, message: "JanusFT.shieldedTransfer: transfer proof failed")
 
+            // ── STEP 4: Commitment state updates ──────────────────────────────
             let txCommit  = Commitment(x: publicInputs[2], y: publicInputs[3])
             let newSender = Commitment(x: publicInputs[4], y: publicInputs[5])
 
@@ -604,17 +750,27 @@ access(all) contract JanusFT {
                 emit FirstSnapshot(account: toAccount, block: getCurrentBlock().height)
             }
 
-            emit ShieldedTransferWithSnapshot(
-                fromCommitX:           newSender.x,
-                fromCommitY:           newSender.y,
-                toCommitX:             newRecipient.x,
-                toCommitY:             newRecipient.y,
-                encryptedSnapshotFrom: encryptedSnapshotFrom,
-                ephPubFromX:           ephPubFromX,
-                ephPubFromY:           ephPubFromY,
-                encryptedNoteTo:       encryptedNoteTo,
-                ephPubToX:             ephPubToX,
-                ephPubToY:             ephPubToY
+            // ── STEP 5: Deposit encrypted note to recipient's ShieldedInbox ───
+            // recipientInbox was borrowed in step 1; use it here after state
+            // updates so the note index reflects the post-transfer state.
+            recipientInbox.deposit(
+                ciphertext:  encryptedNoteTo,
+                ephPubkeyX:  ephPubToX,
+                ephPubkeyY:  ephPubToY,
+                depositor:   fromAccount
+            )
+
+            // ── STEP 6: Emit event (for indexers / auditability) ──────────────
+            emit ShieldedTransferNote(
+                fromAccount:     fromAccount,
+                toAccount:       toAccount,
+                fromCommitX:     newSender.x,
+                fromCommitY:     newSender.y,
+                toCommitX:       newRecipient.x,
+                toCommitY:       newRecipient.y,
+                encryptedNoteTo: encryptedNoteTo,
+                ephPubToX:       ephPubToX,
+                ephPubToY:       ephPubToY
             )
         }
 
@@ -734,6 +890,11 @@ access(all) contract JanusFT {
 
     // -----------------------------------------------------------------------
     // Admin resource
+    //
+    // The Admin resource at AdminStoragePath (/storage/janusFTAdmin) serves as
+    // the "admin proof" for all privileged operations.  AdminProofStoragePath
+    // is an alias to this same path.  Transactions that perform admin slot resets
+    // borrow this resource and call adminResetSlot / adminBatchResetSlots directly.
     // -----------------------------------------------------------------------
 
     access(all) resource Admin {
@@ -746,6 +907,12 @@ access(all) contract JanusFT {
             JanusFT.totalLocked = 0.0
             JanusFT.totalSupplyCommitment = Commitment(x: 0, y: 1)
             JanusFT.commitments = {}
+        }
+        // MAINNET-PREPARE-REMOVE: test helper — sets an arbitrary commitment for a
+        // user WITHOUT ZK proof or BabyJub cross-VM.  Used by Cadence unit tests
+        // to seed state before testing adminResetSlot / adminBatchResetSlots.
+        access(all) fun setCommitmentForTestingOnly(account: Address, x: UInt256, y: UInt256) {
+            JanusFT.commitments[account] = Commitment(x: x, y: y)
         }
 
         access(all) fun initFees(recipient: Address, bps: UInt16, receiverPath: PublicPath) {
@@ -780,6 +947,49 @@ access(all) contract JanusFT {
         // Kept from old Admin for backward compatibility (now renamed to setUnderlyingVaultType)
         access(all) fun setUnderlyingVaultType(typeIdentifier: String) {
             JanusFT.underlyingVaultTypeIdentifier = typeIdentifier
+        }
+
+        // -----------------------------------------------------------------------
+        // v0.8 slot reset functions
+        //
+        // adminResetSlot clears a single user's commitment back to nil (the
+        // identity sentinel).  Useful for emergency recovery (e.g. corrupted state
+        // due to a protocol bug) or mainnet-prepare test cleanup.
+        //
+        // adminBatchResetSlots silently skips users without existing slots and
+        // is bounded by MAX_BATCH_RESET (100) to prevent gas exhaustion.
+        //
+        // Both functions emit SlotReset for off-chain audit trail.
+        // -----------------------------------------------------------------------
+
+        /// Reset a single user's commitment slot to nil (identity).
+        ///
+        /// Panics if the user has no existing slot — the admin must only
+        /// reset slots that are known to exist to avoid silent no-ops.
+        access(all) fun adminResetSlot(user: Address) {
+            pre {
+                JanusFT.commitments[user] != nil:
+                    "JanusFT.adminResetSlot: no slot found for user — ".concat(user.toString())
+            }
+            JanusFT.commitments.remove(key: user)
+            emit SlotReset(user: user)
+        }
+
+        /// Batch-reset up to MAX_BATCH_RESET user slots.
+        ///
+        /// Silently skips users without existing slots (no panic on missing).
+        /// Panics if `users.length > MAX_BATCH_RESET` to prevent gas exhaustion.
+        access(all) fun adminBatchResetSlots(users: [Address]) {
+            pre {
+                users.length <= JanusFT.MAX_BATCH_RESET():
+                    "JanusFT.adminBatchResetSlots: batch exceeds MAX_BATCH_RESET (100)"
+            }
+            for user in users {
+                if JanusFT.commitments[user] != nil {
+                    JanusFT.commitments.remove(key: user)
+                    emit SlotReset(user: user)
+                }
+            }
         }
     }
 
@@ -851,6 +1061,13 @@ access(all) contract JanusFT {
     // Public reader helpers
     // -----------------------------------------------------------------------
 
+    /// Returns the address of the account that holds the CommitmentRegistry resource.
+    /// Callers use this to borrow the public CommitmentRegistryPublic capability
+    /// for calling shieldedTransfer (which is exposed in the public interface).
+    access(all) view fun registryAddress(): Address {
+        return self.account.address
+    }
+
     access(all) fun balanceOfCommitment(account: Address): Commitment {
         return self.commitments[account] ?? Commitment(x: 0, y: 1)
     }
@@ -868,6 +1085,67 @@ access(all) contract JanusFT {
     }
 
     // -----------------------------------------------------------------------
+    // claimBatch (v0.8.1) — aggregate ShieldedInbox notes into commitment
+    //
+    // Aggregates multiple inbox notes (received via shieldedTransfer) into the
+    // caller's running commitment in a single Groth16-verified cross-VM call.
+    //
+    // Public input layout (ConfidentialClaimBatch circuit, 6 signals):
+    //   [0..1] C_old      — caller's current on-chain commitment (must match)
+    //   [2..3] C_new      — new commitment after aggregation
+    //   [4..5] C_consumed — homomorphic sum of note commitments consumed
+    //
+    // The circuit proves: C_new = C_old + C_consumed (on BabyJubJub).
+    //
+    // TRUST ASSUMPTION (v0.8 testnet):
+    //   Notes in the ShieldedInbox are NOT marked as consumed on-chain after this
+    //   call. The C_old state machine is the sole replay barrier: once C_old
+    //   advances to C_new, any proof referencing the old C_old fails step 1.
+    //   A caller cannot replay the same proof twice — the second call would see
+    //   C_old = C_new (not the previous value).
+    //
+    //   Mainnet fix (L6): NoteCommitmentTracker.sol marks notes spent on the EVM
+    //   side; the Cadence shieldedTransfer checks spent-ness before depositing.
+    //   This closes the window for cross-session note reuse scenarios.
+    // -----------------------------------------------------------------------
+    access(all) fun claimBatch(
+        account:      Address,
+        publicInputs: [UInt256],
+        proof:        [UInt256],
+        coa:          auth(EVM.Call) &EVM.CadenceOwnedAccount
+    ) {
+        pre {
+            publicInputs.length == 6: "JanusFT.claimBatch: publicInputs must have 6 elements"
+            proof.length == 8:         "JanusFT.claimBatch: proof must have 8 limbs"
+        }
+
+        // ── Step 1: C_old consistency check (no cross-VM) ────────────────
+        let current = self.commitments[account] ?? Commitment(x: 0, y: 1)
+        assert(
+            publicInputs[0] == current.x && publicInputs[1] == current.y,
+            message: "JanusFT.claimBatch: C_old mismatch with stored commitment"
+        )
+
+        // ── Step 2: ZK proof verification (cross-VM Groth16) ─────────────
+        let verified = JanusFT._verifyBatchClaimProof(
+            proof: proof, publicInputs: publicInputs, coa: coa
+        )
+        assert(verified, message: "JanusFT.claimBatch: invalid batch claim proof")
+
+        // ── Step 3: Advance commitment to C_new ──────────────────────────
+        self.commitments[account] = Commitment(x: publicInputs[2], y: publicInputs[3])
+
+        emit BatchClaimed(
+            account:    account,
+            newCommitX: publicInputs[2],
+            newCommitY: publicInputs[3]
+        )
+
+        // NOTE(v0.8 testnet): inbox notes NOT marked consumed on-chain.
+        // C_old state machine bounds replay. Mainnet: NoteCommitmentTracker (L6).
+    }
+
+    // -----------------------------------------------------------------------
     // Init — PRESERVED from old contract (upgrade validator requires same init)
     //
     // NOTE: custodyVaultType is derived dynamically from underlyingVaultTypeIdentifier
@@ -879,6 +1157,11 @@ access(all) contract JanusFT {
         self.AdminStoragePath               = /storage/janusFTAdmin
         self.CommitmentRegistryStoragePath  = /storage/janusFTRegistry
         self.CommitmentRegistryPublicPath   = /public/janusFTRegistry
+
+        // v0.8: AdminProofStoragePath aliases AdminStoragePath.
+        // Transactions use AdminProofStoragePath to borrow the Admin resource when
+        // performing privileged slot-reset operations.
+        self.AdminProofStoragePath          = /storage/janusFTAdmin
 
         // Keep old default from lab spike (upgrade compat)
         self.underlyingVaultTypeIdentifier  = "A.7e60df042a9c0868.FlowToken.Vault"

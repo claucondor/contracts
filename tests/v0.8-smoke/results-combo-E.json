@@ -1,0 +1,109 @@
+{
+  "phase": "10.E",
+  "scenario": "admin-reset-cross-contract-isolation",
+  "started": "2026-06-09T19:45:50.845Z",
+  "steps": {
+    "accounts": {
+      "deployer": "0xFc47B35f79d26A060B652E112c53d7c6057d05FF",
+      "alice_e": "0x7021809731f32c182Ebee54EA6aD85b93a8B8492",
+      "alice_e_key": "0x3dc5dc6395d0fe2a7f56d6c57c58fb5a3ee50717ce4da2410f2d4a210235d7c8",
+      "bob_e": "0xd5051b8a036d68ce1B93f66D804BcE255609306d",
+      "bob_e_key": "0x711b1eb1d47f2cd65a2cb5a0aea11c0f687c386136a6ca14269873d31057d575",
+      "carol_e": "0xeFCc9CB4C4DDB1Db2b14Ca7bD87DBb4A365BA312",
+      "carol_e_key": "0xabbbf24e9eca355cc044407060ae2fa2d362bf48f152cecdbba03c6f0b89bfd5",
+      "ts": "2026-06-09T19:45:50.921Z"
+    },
+    "setup": {
+      "ts": "2026-06-09T19:47:59.131Z"
+    },
+    "initial_wraps": {
+      "alice": {
+        "flow": {
+          "cx": "10907733150225143940410002522255757542135583985985974774101290753845144069399",
+          "cy": "8190782724987289990160997859195088117547015737949324609073812904529506982015"
+        },
+        "musdc": {
+          "cx": "6747271628673152531793198020862470495261448220264051896459388013041639680373",
+          "cy": "7797583392244297876704542259403987456520545638100644970805095097768570090638"
+        },
+        "ft": {
+          "x": "5217775727337854397094219913333306050482421194158392825476077031331278576562",
+          "y": "7851159464419253201960973164643034316577988511552223327401010059178660568781"
+        }
+      },
+      "bob": {
+        "flow": {
+          "cx": "7244999104719562648093768130056983175109409553276253376655517536879062744704",
+          "cy": "13020209074727163217849297047007141306109359418849182536555074598694249003715"
+        },
+        "musdc": {
+          "cx": "6106180417179388124285972994041286655449295435461069485559982378422229795749",
+          "cy": "12204569276575054357739844560054203250158600581706220740730415423792798121428"
+        },
+        "ft": {
+          "x": "11890699629726037272175201748118474899180379949371998345735391354882270746313",
+          "y": "17350517463440815977280283999721908203354872286528267194555971785774006523946"
+        }
+      },
+      "carol": {
+        "flow": {
+          "cx": "18515981192924488007754110596810259790572387434868652206578766138277638094312",
+          "cy": "18328038266030275226505970899059728563022854064362701241370137520081582595433"
+        },
+        "musdc": {
+          "cx": "20517419640026124770802058363742788593448963644209256682898467780972803206441",
+          "cy": "6343330499035065478269448558138353014905693969222781945016221873900297231035"
+        }
+      },
+      "ts": "2026-06-09T19:50:01.663Z"
+    },
+    "reset_e1": {
+      "target": "bob_E JanusFlow",
+      "bob_flow_identity": true,
+      "bob_musdc_unchanged": true,
+      "alice_flow_unchanged": true,
+      "carol_flow_unchanged": true,
+      "isolation_pass": true,
+      "ts": "2026-06-09T19:50:13.502Z"
+    },
+    "reset_e2": {
+      "target": "carol_E JanusERC20",
+      "carol_musdc_identity": true,
+      "carol_flow_unchanged": true,
+      "alice_musdc_unchanged": true,
+      "bob_musdc_unchanged": true,
+      "isolation_pass": true,
+      "ts": "2026-06-09T19:50:32.300Z"
+    },
+    "reset_e3": {
+      "target": "alice_Cadence + bob_Cadence JanusFT",
+      "alice_ft_identity": true,
+      "bob_ft_identity": true,
+      "alice_flow_unchanged": true,
+      "alice_musdc_unchanged": true,
+      "isolation_pass": true,
+      "ts": "2026-06-09T19:50:44.594Z"
+    },
+    "reset_e4": {
+      "target": "all 3 EVM users JanusFlow batch",
+      "alice_flow_identity": true,
+      "bob_flow_identity": true,
+      "carol_flow_identity": true,
+      "alice_musdc_unchanged": true,
+      "isolation_pass": true,
+      "ts": "2026-06-09T19:51:10.016Z"
+    }
+  },
+  "verdict": "GREEN",
+  "finished": "2026-06-09T19:51:10.016Z",
+  "summary": {
+    "resets_tested": 4,
+    "all_isolation_pass": true,
+    "resets": {
+      "E1_bob_flow": true,
+      "E2_carol_musdc": true,
+      "E3_alice_bob_ft_cadence": true,
+      "E4_all3_flow_batch": true
+    }
+  }
+}

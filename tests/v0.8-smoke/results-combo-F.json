@@ -1,0 +1,92 @@
+{
+  "phase": "11.F",
+  "scenario": "multi-token-checkpoint-isolation",
+  "started": "2026-06-11T05:05:22.716Z",
+  "steps": {
+    "accounts": {
+      "deployer": "0xFc47B35f79d26A060B652E112c53d7c6057d05FF",
+      "alice_F": "0xF935E960C2cF2F9d310475d4957605ca8029F618",
+      "alice_F_key": "0xd6708d5ba66d0e999fab4804e61ff8a2fe5d80887fb5585a098e8684580597eb",
+      "ts": "2026-06-11T05:05:22.776Z"
+    },
+    "setup": {
+      "fund_tx": "0x542dc823c761a0add19321554fc4374a65beb82f4d0ca95c80d107d26df39849",
+      "memokey_tx": "0xa387e7b8369f3a53b1faae58c566fe5a859520a3edd5f174f51da9b0ffcd0b80",
+      "alice_jub_pub_x": "3314966105489477649561264684273600950192130804742601927421817368054257039400",
+      "alice_jub_pub_y": "17207268941858248047735289254544163554719789690750748246047318766205237349967",
+      "flow_slot_empty": true,
+      "musdc_slot_empty": true,
+      "verified": true,
+      "ts": "2026-06-11T05:05:36.837Z"
+    },
+    "phase1_flow": {
+      "wrap_tx": "0x301e62f75a9163d76201f5a6d50d9c4292a2ffd763c9a662f2f35147b4e23e0f",
+      "checkpoint_update_tx": "0xa6d07bebc5726541c53ee63c38654ccae530f1a1a2c5a5a291a609a6407ee893",
+      "wrap_amount": "100000000000000000",
+      "commit_x": "11510126818620786277966352392742438894965069389665775245138607730097360723763",
+      "commit_y": "5948192766515755827653089174761521582603106515498482527196412112878132271755",
+      "checkpoint_version": "1",
+      "decrypted_amount": "100000000000000000",
+      "read_flow_ok": true,
+      "read_musdc_reverts": true,
+      "verified": true,
+      "ts": "2026-06-11T05:05:56.837Z"
+    },
+    "phase2_musdc": {
+      "mint_tx": "0x1113a814d942e02dd6ecee1506b0038c824b916f80a5d104390fdadc4dfc233c",
+      "approve_tx": "0xafef341f87ed8ae5f760f784e609254fc3e7b1a261af770cf4751a2102a871f9",
+      "wrap_tx": "0xfed9d5baf5cad9678afc9850c641b3607eeb355836d5f2bc8c9bd3eadbdb0651",
+      "checkpoint_update_tx": "0x27c9642595dd0144aecffc6be531d9e91428c60b8c0b7e295457f8027e6dbfd0",
+      "wrap_amount": "5000000",
+      "commit_x": "7396938796763485214868153071871146116244166175149408020549974144326914649991",
+      "commit_y": "20470968081775836872896680524524020645445858712509089295456511756418231707188",
+      "checkpoint_version": "1",
+      "decrypted_amount": "5000000",
+      "read_flow_unchanged": true,
+      "read_musdc_ok": true,
+      "verified": true,
+      "ts": "2026-06-11T05:06:37.889Z"
+    },
+    "final_assertions": {
+      "flow_metadata_hasCheckpoint": true,
+      "musdc_metadata_hasCheckpoint": true,
+      "zero_addr_hasCheckpoint": false,
+      "flow_balance_correct": true,
+      "musdc_balance_correct": true,
+      "snapshots_are_distinct": true,
+      "flow_decrypted_amount": "100000000000000000",
+      "musdc_decrypted_amount": "5000000",
+      "ts": "2026-06-11T05:06:39.711Z"
+    }
+  },
+  "verdict": "PASS",
+  "finished": "2026-06-11T05:06:39.712Z",
+  "wall_clock_ms": 76993,
+  "summary": {
+    "alice_F_evm": "0xF935E960C2cF2F9d310475d4957605ca8029F618",
+    "alice_F_key": "0xd6708d5ba66d0e999fab4804e61ff8a2fe5d80887fb5585a098e8684580597eb",
+    "alice_jub_priv": "859239805202097022767669440916584202275040689596527028887846407788749502302",
+    "alice_jub_pub_x": "3314966105489477649561264684273600950192130804742601927421817368054257039400",
+    "alice_jub_pub_y": "17207268941858248047735289254544163554719789690750748246047318766205237349967",
+    "checkpoint_contract": "0x88C9fD443BC15d1Cd24bc724DB6928D3246b2E26",
+    "janusFlow_proxy": "0xA64340C1d356835A2450306Ffd290Ed52c001Ad3",
+    "janusERC20_proxy": "0xFD8F82bE1782AF1F85f4673065e94fb3F8D5387d",
+    "tx_hashes": {
+      "fund": "0x542dc823c761a0add19321554fc4374a65beb82f4d0ca95c80d107d26df39849",
+      "memokey": "0xa387e7b8369f3a53b1faae58c566fe5a859520a3edd5f174f51da9b0ffcd0b80",
+      "flow_wrap": "0x301e62f75a9163d76201f5a6d50d9c4292a2ffd763c9a662f2f35147b4e23e0f",
+      "flow_checkpoint_update": "0xa6d07bebc5726541c53ee63c38654ccae530f1a1a2c5a5a291a609a6407ee893",
+      "mint_musdc": "0x1113a814d942e02dd6ecee1506b0038c824b916f80a5d104390fdadc4dfc233c",
+      "approve_musdc": "0xafef341f87ed8ae5f760f784e609254fc3e7b1a261af770cf4751a2102a871f9",
+      "musdc_wrap": "0xfed9d5baf5cad9678afc9850c641b3607eeb355836d5f2bc8c9bd3eadbdb0651",
+      "musdc_checkpoint_update": "0x27c9642595dd0144aecffc6be531d9e91428c60b8c0b7e295457f8027e6dbfd0"
+    },
+    "decrypted_flow_amount": "100000000000000000",
+    "decrypted_musdc_amount": "5000000",
+    "snapshots_are_distinct": true,
+    "flow_expected": "100000000000000000",
+    "musdc_expected": "5000000",
+    "flow_correct": true,
+    "musdc_correct": true
+  }
+}
